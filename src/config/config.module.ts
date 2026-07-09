@@ -1,0 +1,64 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import {
+  aiConfig,
+  appConfig,
+  avatarConfig,
+  brandAssetConfig,
+  contractConfig,
+  databaseConfig,
+  dropMediaConfig,
+  invoiceConfig,
+  jwtConfig,
+  mailConfig,
+  messageAttachmentConfig,
+  otelConfig,
+  ordersConfig,
+  payoutsConfig,
+  productMediaConfig,
+  pushConfig,
+  redisConfig,
+  securityConfig,
+  sentryConfig,
+  storageConfig,
+  stripeConfig,
+  throttleConfig,
+  typesenseConfig,
+} from './configuration';
+import { validate } from './env.validation';
+
+@Module({
+  imports: [
+    NestConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env'],
+      load: [
+        appConfig,
+        databaseConfig,
+        redisConfig,
+        jwtConfig,
+        securityConfig,
+        mailConfig,
+        avatarConfig,
+        brandAssetConfig,
+        messageAttachmentConfig,
+        contractConfig,
+        dropMediaConfig,
+        productMediaConfig,
+        ordersConfig,
+        stripeConfig,
+        invoiceConfig,
+        payoutsConfig,
+        pushConfig,
+        aiConfig,
+        throttleConfig,
+        sentryConfig,
+        typesenseConfig,
+        storageConfig,
+        otelConfig,
+      ],
+      validate,
+    }),
+  ],
+})
+export class ConfigModule {}

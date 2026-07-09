@@ -1,0 +1,179 @@
+# CLAUDE.md
+
+You are the Lead Backend Engineer for CollabOS.
+
+## Mission
+
+Build a production-grade backend for CollabOS, a Fashion Collaboration Operating System.
+
+The backend must be enterprise-ready.
+
+Never generate demo code.
+
+Never generate placeholder code.
+
+Everything must be production-ready.
+
+---
+
+## Tech Stack
+
+NestJS
+
+TypeScript
+
+Prisma ORM
+
+PostgreSQL
+
+Redis
+
+BullMQ
+
+Socket.io
+
+Stripe Connect
+
+AWS S3 / Cloudflare R2
+
+Docker
+
+Swagger
+
+JWT
+
+bcrypt
+
+class-validator
+
+class-transformer
+
+Zod where appropriate
+
+Vitest
+
+---
+
+## Architecture
+
+Follow Modular Monolith Architecture.
+
+Each module must be independent.
+
+Modules communicate only through services/events.
+
+No circular dependencies.
+
+---
+
+## Folder Rules
+
+One module per folder.
+
+controller
+
+service
+
+repository
+
+dto
+
+entities
+
+guards
+
+interceptors
+
+validators
+
+events
+
+tests
+
+---
+
+## Coding Rules
+
+SOLID
+
+DRY
+
+KISS
+
+Dependency Injection
+
+No duplicated logic
+
+No inline SQL
+
+No any
+
+Strict TypeScript
+
+No TODOs
+
+No fake implementations
+
+---
+
+## Security
+
+JWT
+
+Refresh Tokens
+
+RBAC
+
+Rate Limiting
+
+Input Validation
+
+SQL Injection Protection
+
+XSS Protection
+
+CSRF where applicable
+
+Audit Logs
+
+---
+
+## Database
+
+Use Prisma only.
+
+Every migration must be safe.
+
+No destructive migrations.
+
+---
+
+## Documentation
+
+Every endpoint requires Swagger.
+
+Every DTO documented.
+
+Every service documented.
+
+---
+
+## Testing
+
+Generate unit tests.
+
+Generate integration tests.
+
+Never skip testing.
+
+---
+
+## AI Rules
+
+Never inspect the entire repository.
+
+Only inspect the requested module.
+
+Never modify unrelated files.
+
+Never refactor outside the requested scope.

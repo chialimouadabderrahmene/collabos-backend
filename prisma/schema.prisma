@@ -1,0 +1,1390 @@
+// Schema owned collectively by feature modules.
+// Models are added per-module as business logic is implemented.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth module (01-auth)
+// ---------------------------------------------------------------------------
+
+enum AuditAction {
+  REGISTER
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  EMAIL_VERIFICATION_REQUESTED
+  EMAIL_VERIFIED
+  PAYMENT_SUCCEEDED
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  isEmailVerified Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Profile (02-users)
+  firstName   String?
+  lastName    String?
+  displayName String?
+  bio         String?
+  avatarUrl   String?
+
+  roles                   Role[]                   @relation("UserRoles")
+  refreshTokens           RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  auditLogs               AuditLog[]
+
+  settings     UserSettings?
+  preferences  UserPreferences?
+  notification NotificationPreferences?
+  privacy      PrivacySettings?
+
+  brands       Brand[]         @relation("BrandOwner")
+  brandFollows BrandFollower[]
+
+  applications  Application[]
+  notifications Notification[]
+
+  conversationParticipations ConversationParticipant[]
+  sentMessages               Message[]
+
+  dealsAsCreator Deal[]         @relation("DealCreator")
+  dealProposals  DealProposal[]
+
+  contractsAsCreator       Contract[]          @relation("ContractCreator")
+  contractVersionsAuthored ContractVersion[]   @relation("ContractVersionAuthor")
+  contractSignatures       ContractSignature[]
+  contractEvents           ContractEvent[]
+
+  cart             Cart?
+  ordersAsBuyer    Order[]
+  refundsRequested Refund[]
+
+  connectedAccount        ConnectedAccount?
+  paymentsAsPayer         Payment[]
+  paymentSplitsEarned     PaymentSplit[]
+  invoicesReceived        Invoice[]
+  transactions            Transaction[]
+  payouts                 Payout[]
+  pageViews               PageView[]
+  pushTokens              PushToken[]
+  reportsFiled            ContentReport[]    @relation("ReportsFiled")
+  reportsReviewed         ContentReport[]    @relation("ReportsReviewed")
+  platformSettingsUpdates PlatformSettings[]
+
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]       @relation("UserRoles")
+  permissions Permission[] @relation("RolePermissions")
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  roles Role[] @relation("RolePermissions")
+
+  @@map("permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    AuditAction
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Users module (02-users)
+// ---------------------------------------------------------------------------
+
+enum ThemePreference {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum DigestFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  NEVER
+}
+
+enum MeasurementUnit {
+  METRIC
+  IMPERIAL
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model UserSettings {
+  id        String          @id @default(uuid())
+  userId    String          @unique
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme     ThemePreference @default(SYSTEM)
+  language  String          @default("en")
+  timezone  String          @default("UTC")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("user_settings")
+}
+
+model UserPreferences {
+  id              String          @id @default(uuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  digestFrequency DigestFrequency @default(WEEKLY)
+  measurementUnit MeasurementUnit @default(METRIC)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("user_preferences")
+}
+
+model NotificationPreferences {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  inAppNotifications Boolean  @default(true)
+  smsNotifications   Boolean  @default(false)
+  marketingEmails    Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model PrivacySettings {
+  id                  String            @id @default(uuid())
+  userId              String            @unique
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileVisibility   ProfileVisibility @default(PUBLIC)
+  showEmail           Boolean           @default(false)
+  allowSearchIndexing Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@map("privacy_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Brands module (03-brands)
+// ---------------------------------------------------------------------------
+
+model Brand {
+  id             String    @id @default(uuid())
+  ownerId        String
+  owner          User      @relation("BrandOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String    @unique
+  logoUrl        String?
+  coverUrl       String?
+  isVerified     Boolean   @default(false)
+  verifiedAt     DateTime?
+  followersCount Int       @default(0)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  profile    BrandProfile?
+  categories Category[]      @relation("BrandCategories")
+  followers  BrandFollower[]
+  briefs     Brief[]
+  deals      Deal[]
+  contracts  Contract[]
+  drops      Drop[]
+  products   Product[]
+  orders     Order[]
+  pageViews  PageView[]
+
+  @@index([ownerId])
+  @@map("brands")
+}
+
+model BrandProfile {
+  id              String   @id @default(uuid())
+  brandId         String   @unique
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  description     String?
+  websiteUrl      String?
+  instagramHandle String?
+  contactEmail    String?
+  foundedYear     Int?
+  location        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("brand_profiles")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  brands   Brand[]   @relation("BrandCategories")
+  products Product[] @relation("ProductCategories")
+
+  @@map("categories")
+}
+
+model BrandFollower {
+  id        String   @id @default(uuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([brandId, userId])
+  @@index([brandId])
+  @@index([userId])
+  @@map("brand_followers")
+}
+
+// ---------------------------------------------------------------------------
+// Briefs module (06-briefs)
+// ---------------------------------------------------------------------------
+
+enum BriefStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+model Brief {
+  id                  String      @id @default(uuid())
+  brandId             String
+  brand               Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title               String
+  description         String
+  budgetMin           Int?
+  budgetMax           Int?
+  currency            String      @default("USD")
+  deliverables        String[]    @default([])
+  applicationDeadline DateTime?
+  location            String?
+  isRemote            Boolean     @default(true)
+  status              BriefStatus @default(OPEN)
+  closedAt            DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  applications Application[]
+
+  @@index([brandId])
+  @@index([status])
+  @@map("briefs")
+}
+
+// ---------------------------------------------------------------------------
+// Applications module (07-applications)
+// ---------------------------------------------------------------------------
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum NotificationType {
+  APPLICATION_RECEIVED
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  APPLICATION_WITHDRAWN
+  GENERIC
+}
+
+model Application {
+  id             String            @id @default(uuid())
+  briefId        String
+  brief          Brief             @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  applicantId    String
+  applicant      User              @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  status         ApplicationStatus @default(PENDING)
+  coverMessage   String
+  proposedBudget Int?
+  decidedAt      DateTime?
+  withdrawnAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  deal Deal?
+
+  @@index([briefId])
+  @@index([applicantId])
+  @@index([status])
+  @@map("applications")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  templateKey String?
+  title       String
+  message     String
+  metadata    Json?
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  deliveries NotificationDelivery[]
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging module (08-chat)
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id            String    @id @default(uuid())
+  contextType   String?
+  contextId     String?
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([contextType, contextId])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  attachments MessageAttachment[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Deals module (09-deals)
+// ---------------------------------------------------------------------------
+
+enum DealStatus {
+  NEGOTIATING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum DealParty {
+  BRAND
+  CREATOR
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+model Deal {
+  id            String      @id @default(uuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  briefId       String
+  brandId       String
+  brand         Brand       @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  creatorId     String
+  creator       User        @relation("DealCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+
+  title               String
+  status              DealStatus @default(NEGOTIATING)
+  totalValue          Int?
+  currency            String     @default("USD")
+  revenueSplitBrand   Int?
+  revenueSplitCreator Int?
+  startDate           DateTime?
+  endDate             DateTime?
+
+  activatedAt  DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  proposals        DealProposal[]
+  responsibilities DealResponsibility[]
+  milestones       DealMilestone[]
+  contract         Contract?
+  drops            Drop[]
+  payment          Payment?
+
+  @@index([brandId])
+  @@index([creatorId])
+  @@index([status])
+  @@map("deals")
+}
+
+model DealProposal {
+  id                  String         @id @default(uuid())
+  dealId              String
+  deal                Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  proposedById        String
+  proposedBy          User           @relation(fields: [proposedById], references: [id], onDelete: Cascade)
+  status              ProposalStatus @default(PENDING)
+  totalValue          Int?
+  revenueSplitBrand   Int?
+  revenueSplitCreator Int?
+  startDate           DateTime?
+  endDate             DateTime?
+  message             String?
+  createdAt           DateTime       @default(now())
+  respondedAt         DateTime?
+
+  @@index([dealId])
+  @@index([dealId, status])
+  @@map("deal_proposals")
+}
+
+model DealResponsibility {
+  id          String    @id @default(uuid())
+  dealId      String
+  deal        Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  party       DealParty
+  description String
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([dealId])
+  @@map("deal_responsibilities")
+}
+
+model DealMilestone {
+  id          String    @id @default(uuid())
+  dealId      String
+  deal        Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title       String
+  dueDate     DateTime?
+  position    Int       @default(0)
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([dealId])
+  @@map("deal_milestones")
+}
+
+// ---------------------------------------------------------------------------
+// Contracts module (10-contracts)
+// ---------------------------------------------------------------------------
+
+enum AgreementStatus {
+  DRAFT
+  AWAITING_SIGNATURE
+  PARTIALLY_SIGNED
+  EXECUTED
+  VOIDED
+}
+
+enum ContractEventType {
+  CREATED
+  VERSION_CREATED
+  SENT_FOR_SIGNATURE
+  SIGNED
+  FULLY_EXECUTED
+  VOIDED
+}
+
+model Contract {
+  id        String          @id @default(uuid())
+  dealId    String          @unique
+  deal      Deal            @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  brandId   String
+  brand     Brand           @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  creatorId String
+  creator   User            @relation("ContractCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  status    AgreementStatus @default(DRAFT)
+
+  executedAt DateTime?
+  voidedAt   DateTime?
+  voidReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions ContractVersion[]
+  events   ContractEvent[]
+
+  @@index([brandId])
+  @@index([creatorId])
+  @@index([status])
+  @@map("contracts")
+}
+
+model ContractVersion {
+  id            String   @id @default(uuid())
+  contractId    String
+  contract      Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  content       String
+  pdfFilename   String?
+  createdById   String
+  createdBy     User     @relation("ContractVersionAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  signatures ContractSignature[]
+
+  @@unique([contractId, versionNumber])
+  @@index([contractId])
+  @@map("contract_versions")
+}
+
+model ContractSignature {
+  id                String          @id @default(uuid())
+  contractVersionId String
+  contractVersion   ContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Cascade)
+  signerId          String
+  signer            User            @relation(fields: [signerId], references: [id], onDelete: Cascade)
+  party             DealParty
+  signedName        String
+  ipAddress         String?
+  signedAt          DateTime        @default(now())
+
+  @@unique([contractVersionId, party])
+  @@index([contractVersionId])
+  @@map("contract_signatures")
+}
+
+model ContractEvent {
+  id         String            @id @default(uuid())
+  contractId String
+  contract   Contract          @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  type       ContractEventType
+  actorId    String?
+  actor      User?             @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+
+  @@index([contractId])
+  @@map("contract_events")
+}
+
+// ---------------------------------------------------------------------------
+// Drops module (11-drops)
+// ---------------------------------------------------------------------------
+
+enum DropStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DropVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum DropMediaType {
+  IMAGE
+  VIDEO
+}
+
+model Drop {
+  id          String         @id @default(uuid())
+  brandId     String
+  brand       Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  dealId      String?
+  deal        Deal?          @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  title       String
+  slug        String         @unique
+  description String?
+  status      DropStatus     @default(DRAFT)
+  visibility  DropVisibility @default(PRIVATE)
+
+  publishAt   DateTime?
+  publishedAt DateTime?
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  page     DropPage?
+  seo      DropSeo?
+  media    DropMedia[]
+  products DropProduct[]
+
+  @@index([brandId])
+  @@index([status])
+  @@map("drops")
+}
+
+model DropPage {
+  id           String   @id @default(uuid())
+  dropId       String   @unique
+  drop         Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  headline     String?
+  subheadline  String?
+  heroImageUrl String?
+  bodyContent  String?
+  ctaLabel     String?
+  ctaUrl       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("drop_pages")
+}
+
+model DropSeo {
+  id              String   @id @default(uuid())
+  dropId          String   @unique
+  drop            Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  metaTitle       String?
+  metaDescription String?
+  ogImageUrl      String?
+  canonicalUrl    String?
+  keywords        String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("drop_seo")
+}
+
+model DropMedia {
+  id        String        @id @default(uuid())
+  dropId    String
+  drop      Drop          @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  url       String
+  type      DropMediaType @default(IMAGE)
+  altText   String?
+  position  Int           @default(0)
+  createdAt DateTime      @default(now())
+
+  @@index([dropId])
+  @@map("drop_media")
+}
+
+model DropProduct {
+  id            String   @id @default(uuid())
+  dropId        String
+  drop          Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  price         Int
+  currency      String   @default("USD")
+  sku           String?
+  stockQuantity Int?
+  imageUrl      String?
+  position      Int      @default(0)
+  isAvailable   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dropId])
+  @@map("drop_products")
+}
+
+// ---------------------------------------------------------------------------
+// Products module (12-products)
+// ---------------------------------------------------------------------------
+
+enum StockMovementType {
+  RESTOCK
+  SALE
+  ADJUSTMENT
+  RETURN
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String   @unique
+  description    String?
+  price          Int
+  compareAtPrice Int?
+  currency       String   @default("USD")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  categories Category[]       @relation("ProductCategories")
+  variants   ProductVariant[]
+  media      ProductMedia[]
+
+  @@index([brandId])
+  @@map("products")
+}
+
+model ProductVariant {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku           String   @unique
+  size          String?
+  color         String?
+  priceOverride Int?
+  stockQuantity Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stockMovements StockMovement[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+
+  @@unique([productId, size, color])
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model StockMovement {
+  id        String            @id @default(uuid())
+  variantId String
+  variant   ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+  quantity  Int
+  reason    String?
+  createdAt DateTime          @default(now())
+
+  @@index([variantId])
+  @@map("stock_movements")
+}
+
+model ProductMedia {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@map("product_media")
+}
+
+// ---------------------------------------------------------------------------
+// Orders module (13-orders)
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FULFILLED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum ShipmentStatus {
+  PENDING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+}
+
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String         @id @default(uuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([cartId, variantId])
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  buyerId         String
+  buyer           User        @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  brandId         String
+  brand           Brand       @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  status          OrderStatus @default(PENDING_PAYMENT)
+  subtotal        Int
+  currency        String      @default("USD")
+  shippingAddress Json?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  cancelledAt  DateTime?
+  completedAt  DateTime?
+  cancelReason String?
+
+  items     OrderItem[]
+  refunds   Refund[]
+  shipments Shipment[]
+  payment   Payment?
+
+  @@index([buyerId])
+  @@index([brandId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String         @id @default(uuid())
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productName String
+  sku         String
+  unitPrice   Int
+  quantity    Int
+  createdAt   DateTime       @default(now())
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Refund {
+  id             String       @id @default(uuid())
+  orderId        String
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  amount         Int
+  reason         String
+  status         RefundStatus @default(PENDING)
+  rejectedReason String?
+  createdAt      DateTime     @default(now())
+  processedAt    DateTime?
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+model Shipment {
+  id             String         @id @default(uuid())
+  orderId        String
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrier        String
+  trackingNumber String
+  trackingUrl    String?
+  status         ShipmentStatus @default(PENDING)
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([orderId])
+  @@map("shipments")
+}
+
+// ---------------------------------------------------------------------------
+// Payments module (14-payments)
+// ---------------------------------------------------------------------------
+
+enum ConnectAccountStatus {
+  PENDING
+  ACTIVE
+  RESTRICTED
+  REJECTED
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum SplitStatus {
+  PENDING
+  RELEASED
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+}
+
+enum TransactionType {
+  CHARGE
+  TRANSFER
+  REFUND
+  PLATFORM_FEE
+  PAYOUT
+}
+
+enum PayoutStatus {
+  PENDING
+  IN_TRANSIT
+  PAID
+  FAILED
+  CANCELED
+}
+
+enum PageViewTargetType {
+  BRAND
+  PRODUCT
+  DROP
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  IN_APP
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum PushPlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum ReportTargetType {
+  USER
+  BRAND
+  PRODUCT
+  DROP
+  MESSAGE
+  DEAL
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  ACTIONED
+  DISMISSED
+}
+
+enum ModerationAction {
+  NONE
+  WARN
+  SUSPEND
+  REMOVE_CONTENT
+}
+
+model ConnectedAccount {
+  id               String               @id @default(uuid())
+  userId           String               @unique
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeAccountId  String               @unique
+  status           ConnectAccountStatus @default(PENDING)
+  chargesEnabled   Boolean              @default(false)
+  payoutsEnabled   Boolean              @default(false)
+  detailsSubmitted Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@map("connected_accounts")
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  stripePaymentIntentId String        @unique
+  payerId               String
+  payer                 User          @relation(fields: [payerId], references: [id], onDelete: Restrict)
+  orderId               String?       @unique
+  order                 Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  dealId                String?       @unique
+  deal                  Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  amount                Int
+  currency              String        @default("USD")
+  status                PaymentStatus @default(REQUIRES_PAYMENT)
+  clientSecret          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  splits       PaymentSplit[]
+  invoice      Invoice?
+  transactions Transaction[]
+
+  @@index([payerId])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentSplit {
+  id               String      @id @default(uuid())
+  paymentId        String
+  payment          Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  recipientUserId  String?
+  recipient        User?       @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+  isPlatformFee    Boolean     @default(false)
+  amount           Int
+  status           SplitStatus @default(PENDING)
+  stripeTransferId String?
+  releasedAt       DateTime?
+  createdAt        DateTime    @default(now())
+
+  @@index([paymentId])
+  @@map("payment_splits")
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  paymentId     String        @unique
+  payment       Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceNumber String        @unique
+  issuedToId    String
+  issuedTo      User          @relation(fields: [issuedToId], references: [id], onDelete: Restrict)
+  amount        Int
+  currency      String        @default("USD")
+  status        InvoiceStatus @default(ISSUED)
+  pdfFilename   String?
+  issuedAt      DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+
+  @@map("invoices")
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentId   String?
+  payment     Payment?        @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  type        TransactionType
+  amount      Int
+  currency    String          @default("USD")
+  description String
+  createdAt   DateTime        @default(now())
+
+  @@index([userId])
+  @@index([paymentId])
+  @@map("transactions")
+}
+
+model Payout {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  stripeAccountId String
+  stripePayoutId  String?      @unique
+  amount          Int
+  currency        String       @default("USD")
+  status          PayoutStatus @default(PENDING)
+  failureReason   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("payouts")
+}
+
+model PageView {
+  id         String             @id @default(uuid())
+  brandId    String
+  brand      Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  targetType PageViewTargetType
+  targetId   String
+  visitorId  String
+  userId     String?
+  user       User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  referrer   String?
+  createdAt  DateTime           @default(now())
+
+  @@index([brandId, createdAt])
+  @@index([visitorId])
+  @@map("page_views")
+}
+
+model NotificationTemplate {
+  id           String   @id @default(uuid())
+  key          String   @unique
+  name         String
+  emailSubject String?
+  emailBody    String?
+  pushTitle    String?
+  pushBody     String?
+  inAppBody    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("notification_templates")
+}
+
+model PushToken {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String       @unique
+  platform  PushPlatform
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+model NotificationDelivery {
+  id             String              @id @default(uuid())
+  notificationId String
+  notification   Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(PENDING)
+  subject        String?
+  body           String?
+  error          String?
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([notificationId])
+  @@map("notification_deliveries")
+}
+
+model ContentReport {
+  id              String            @id @default(uuid())
+  reporterId      String
+  reporter        User              @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType      ReportTargetType
+  targetId        String
+  reason          String
+  details         String?
+  status          ReportStatus      @default(PENDING)
+  reviewedById    String?
+  reviewedBy      User?             @relation("ReportsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  actionTaken     ModerationAction?
+  resolutionNotes String?
+  createdAt       DateTime          @default(now())
+  reviewedAt      DateTime?
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@map("content_reports")
+}
+
+model PlatformSettings {
+  id                 String   @id @default(uuid())
+  maintenanceMode    Boolean  @default(false)
+  newSignupsEnabled  Boolean  @default(true)
+  announcementBanner String?
+  updatedById        String?
+  updatedBy          User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Platform infrastructure (production readiness)
+// ---------------------------------------------------------------------------
+
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  source      String
+  eventId     String
+  processedAt DateTime @default(now())
+
+  @@unique([source, eventId])
+  @@map("webhook_events")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(uuid())
+  key          String   @unique
+  requestPath  String
+  responseBody Json
+  statusCode   Int
+  createdAt    DateTime @default(now())
+
+  @@map("idempotency_keys")
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model OutboxEvent {
+  id            String            @id @default(uuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int               @default(0)
+  lastError     String?
+  createdAt     DateTime          @default(now())
+  publishedAt   DateTime?
+
+  @@index([status])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model SearchSyncState {
+  id           String   @id @default(uuid())
+  collection   String   @unique
+  lastSyncedAt DateTime
+  updatedAt    DateTime @updatedAt
+
+  @@map("search_sync_state")
+}
