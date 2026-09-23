@@ -7,6 +7,8 @@ import {
   SpanExporter,
 } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { IncomingMessage } from 'node:http';
+import { redactUrl } from '../../common/logging/redact-url';
 
 export interface TracingConfig {
   serviceName: string;
@@ -28,6 +30,22 @@ export function createTracingSdk(config: TracingConfig): NodeSDK {
       [ATTR_SERVICE_NAME]: config.serviceName,
     }),
     traceExporter: buildTraceExporter(config.otlpEndpoint),
-    instrumentations: [getNodeAutoInstrumentations()],
+    instrumentations: [
+      getNodeAutoInstrumentations({
+        '@opentelemetry/instrumentation-http': {
+          // Incoming URLs can carry bearer secrets (share tokens, signed-URL
+          // signatures); overwrite the URL attributes with redacted values.
+          requestHook: (span, request) => {
+            if (request instanceof IncomingMessage && request.url) {
+              const redacted = redactUrl(request.url);
+              span.setAttribute('http.target', redacted);
+              span.setAttribute('url.path', redacted.split('?')[0]);
+              span.setAttribute('url.full', redacted);
+              span.setAttribute('http.url', redacted);
+            }
+          },
+        },
+      }),
+    ],
   });
 }

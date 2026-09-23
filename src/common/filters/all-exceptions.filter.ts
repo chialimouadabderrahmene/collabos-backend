@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import { Request, Response } from 'express';
+import { redactUrl } from '../logging/redact-url';
 import { getRequestId } from '../logging/request-context';
 
 interface ErrorResponseBody {
@@ -17,8 +18,13 @@ interface ErrorResponseBody {
   method: string;
   message: string | string[];
   error: string;
+  /** Extra structured fields supplied by the HttpException body (e.g.
+   * `currentRevision` on a 409), when present. */
+  details?: Record<string, unknown>;
   requestId?: string;
 }
+
+const STANDARD_ERROR_KEYS = new Set(['message', 'error', 'statusCode']);
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -39,29 +45,44 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const message = this.extractMessage(exceptionResponse, exception);
     const error = this.extractError(exceptionResponse, exception);
 
+    const details = this.extractDetails(exceptionResponse);
     const requestId = getRequestId();
+    const path = redactUrl(request.url);
 
     const body: ErrorResponseBody = {
       statusCode,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path,
       method: request.method,
       message,
       error,
+      ...(details ? { details } : {}),
       ...(requestId ? { requestId } : {}),
     };
 
     if (statusCode >= 500) {
       this.logger.error(
-        `${request.method} ${request.url} -> ${statusCode}`,
+        `${request.method} ${path} -> ${statusCode}`,
         exception instanceof Error ? exception.stack : undefined,
       );
       Sentry.captureException(exception);
     } else {
-      this.logger.warn(`${request.method} ${request.url} -> ${statusCode}`);
+      this.logger.warn(`${request.method} ${path} -> ${statusCode}`);
     }
 
     response.status(statusCode).json(body);
+  }
+
+  private extractDetails(
+    exceptionResponse: string | object | null,
+  ): Record<string, unknown> | undefined {
+    if (!exceptionResponse || typeof exceptionResponse !== 'object') {
+      return undefined;
+    }
+    const extra = Object.entries(exceptionResponse).filter(
+      ([key]) => !STANDARD_ERROR_KEYS.has(key),
+    );
+    return extra.length > 0 ? Object.fromEntries(extra) : undefined;
   }
 
   private extractMessage(

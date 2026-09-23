@@ -8,6 +8,7 @@ import {
 import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
 import { tap } from 'rxjs';
+import { redactUrl } from './redact-url';
 import { getRequestId } from './request-context';
 
 @Injectable()
@@ -39,7 +40,7 @@ export class LoggingInterceptor implements NestInterceptor {
   ): void {
     const durationMs = Date.now() - start;
     const requestId = getRequestId() ?? '-';
-    const message = `${request.method} ${request.originalUrl} ${statusCode} ${durationMs}ms [${requestId}]`;
+    const message = `${request.method} ${redactUrl(request.originalUrl)} ${statusCode} ${durationMs}ms [${requestId}]`;
 
     if (isError || statusCode >= 500) {
       this.logger.warn(message);

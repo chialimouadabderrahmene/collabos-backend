@@ -31,5 +31,6 @@ import { RevenuePredictionService } from './services/revenue-prediction.service'
     LaunchReadinessService,
     RecommendationsService,
   ],
+  exports: [AnthropicService],
 })
 export class AiModule {}

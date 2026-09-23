@@ -34,6 +34,7 @@ import { ObservabilityModule } from './observability/observability.module';
 import { EventsModule } from './events/events.module';
 import { SearchModule } from './search/search.module';
 import { StorageModule } from './storage/storage.module';
+import { OpportunitiesModule } from './opportunities/opportunities.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { StorageModule } from './storage/storage.module';
     EventsModule,
     SearchModule,
     StorageModule,
+    OpportunitiesModule,
   ],
   controllers: [AppController],
   providers: [

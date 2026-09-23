@@ -1,4 +1,8 @@
-import { BadRequestException, HttpStatus } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpStatus,
+} from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { requestContext } from '../logging/request-context';
@@ -89,5 +93,37 @@ describe('AllExceptionsFilter', () => {
     );
 
     expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('passes extra structured fields through as details', () => {
+    filter.catch(
+      new ConflictException({ message: 'Stale draft', currentRevision: 7 }),
+      buildHost(request, { status }),
+    );
+
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.CONFLICT,
+        message: 'Stale draft',
+        details: { currentRevision: 7 },
+      }),
+    );
+  });
+
+  it('omits details for standard exceptions', () => {
+    filter.catch(new BadRequestException('x'), buildHost(request, { status }));
+
+    const body = json.mock.calls[0][0] as { details?: unknown };
+    expect(body.details).toBeUndefined();
+  });
+
+  it('redacts share tokens from the echoed path', () => {
+    filter.catch(
+      new BadRequestException('x'),
+      buildHost({ method: 'GET', url: '/v1/share/secret-token' }, { status }),
+    );
+
+    const body = json.mock.calls[0][0] as { path: string };
+    expect(body.path).toBe('/v1/share/[redacted]');
   });
 });

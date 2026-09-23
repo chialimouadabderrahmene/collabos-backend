@@ -69,6 +69,11 @@ jobs:
       - name: Validate schema matches migrations
         run: npx prisma migrate status
 
+      - name: Integration tests (immutability trigger, concurrent publish, tenant isolation)
+        run: npm run test:integration
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://collabos:collabos@localhost:5432/collabos
+
   docker-build:
     name: Docker production build
     runs-on: ubuntu-latest
