@@ -11,6 +11,12 @@ export const queryKeys = {
     categories: ["categories"] as const,
   },
 
+  messages: {
+    conversations: ["messages", "conversations"] as const,
+    conversation: (id: string) => ["messages", "conversations", id] as const,
+    thread: (id: string) => ["messages", "conversations", id, "messages"] as const,
+  },
+
   opportunities: {
     all: ["opportunities"] as const,
     list: (query: object) => ["opportunities", "list", query] as const,
