@@ -36,5 +36,16 @@ rule DROP   -p tcp -d "$BIND" --dport "$PORT"
 rule ACCEPT -p tcp -d "$BIND" --dport "$PORT" -i lo
 rule ACCEPT -p tcp -d "$BIND" --dport "$PORT" -i "$IFACE" -s "$SUBNET"
 
-echo "[collabos-fw] INPUT rules for port $PORT:"
+# Traffic from another container's bridge to a *published* port is DNAT'd by
+# Docker and takes the FORWARD path (chain DOCKER-USER), where the INPUT
+# rules above never see it. Match on the ORIGINAL destination (pre-DNAT) so
+# this only ever affects traffic aimed at this API's published port, and
+# drop it unless it arrived on the proxy's bridge.
+iptables -C DOCKER-USER -p tcp -m conntrack --ctorigdst "$BIND" --ctorigdstport "$PORT" \
+  ! -i "$IFACE" -m comment --comment "$TAG" -j DROP 2>/dev/null \
+  || iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctorigdst "$BIND" --ctorigdstport "$PORT" \
+       ! -i "$IFACE" -m comment --comment "$TAG" -j DROP
+
+echo "[collabos-fw] rules for port $PORT:"
 iptables -S INPUT | grep "$TAG"
+iptables -S DOCKER-USER | grep "$TAG"
