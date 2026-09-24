@@ -15,11 +15,14 @@ import { TransactionsController } from './transactions.controller';
 
 @Module({
   imports: [EventsModule],
+  // Order matters: PaymentsController declares GET payments/:id, which would
+  // swallow the literal one-segment routes payments/invoices and
+  // payments/transactions if it were registered before them.
   controllers: [
     ConnectController,
-    PaymentsController,
     InvoicesController,
     TransactionsController,
+    PaymentsController,
   ],
   providers: [
     StripeService,
