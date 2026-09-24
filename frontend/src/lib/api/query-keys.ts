@@ -38,6 +38,49 @@ export const queryKeys = {
     history: (id: string) => ["contracts", id, "history"] as const,
   },
 
+  drops: {
+    all: ["drops"] as const,
+    list: (query: object) => ["drops", "list", query] as const,
+    detail: (id: string) => ["drops", id] as const,
+    page: (id: string) => ["drops", id, "page"] as const,
+    seo: (id: string) => ["drops", id, "seo"] as const,
+    media: (id: string) => ["drops", id, "media"] as const,
+    products: (id: string) => ["drops", id, "products"] as const,
+  },
+
+  products: {
+    all: ["products"] as const,
+    list: (query: object) => ["products", "list", query] as const,
+    detail: (id: string) => ["products", id] as const,
+    variants: (id: string) => ["products", id, "variants"] as const,
+    media: (id: string) => ["products", id, "media"] as const,
+    stock: (id: string, variantId: string) => ["products", id, "variants", variantId, "stock"] as const,
+  },
+
+  cart: ["cart"] as const,
+
+  orders: {
+    all: ["orders"] as const,
+    list: (query: object) => ["orders", "list", query] as const,
+    detail: (id: string) => ["orders", id] as const,
+    refunds: (id: string) => ["orders", id, "refunds"] as const,
+    shipments: (id: string) => ["orders", id, "shipments"] as const,
+  },
+
+  payments: {
+    mine: ["payments", "mine"] as const,
+    connect: ["payments", "connect"] as const,
+    invoices: ["payments", "invoices"] as const,
+    transactions: (query: object) => ["payments", "transactions", query] as const,
+  },
+
+  payouts: {
+    balance: ["payouts", "balance"] as const,
+    list: (query: object) => ["payouts", "list", query] as const,
+    transfers: (query: object) => ["payouts", "transfers", query] as const,
+    report: (query: object) => ["payouts", "report", query] as const,
+  },
+
   messages: {
     conversations: ["messages", "conversations"] as const,
     conversation: (id: string) => ["messages", "conversations", id] as const,

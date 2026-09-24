@@ -13,6 +13,12 @@ export function formatMoney(
   }).format(amount);
 }
 
+/** Amount without a currency symbol — for API payloads that omit the
+ * currency (e.g. the cart), where guessing a symbol would be wrong. */
+export function formatAmount(amount: number): string {
+  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 }).format(amount);
+}
+
 export function formatCompact(value: number): string {
   return new Intl.NumberFormat("en-GB", {
     notation: "compact",
