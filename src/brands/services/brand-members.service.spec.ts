@@ -79,6 +79,7 @@ describe('BrandAccessService', () => {
 
 describe('BrandMembersService', () => {
   let prisma: {
+    brand: { findMany: ReturnType<typeof vi.fn> };
     user: { findFirst: ReturnType<typeof vi.fn> };
     brandMember: {
       findMany: ReturnType<typeof vi.fn>;
@@ -100,6 +101,7 @@ describe('BrandMembersService', () => {
 
   beforeEach(() => {
     prisma = {
+      brand: { findMany: vi.fn().mockResolvedValue([]) },
       user: {
         findFirst: vi
           .fn()
@@ -214,5 +216,63 @@ describe('BrandMembersService', () => {
     await expect(
       service.remove('brand-1', 'viewer', buildUser('viewer')),
     ).resolves.toEqual({ message: 'Member removed' });
+  });
+
+  describe('findMine', () => {
+    function brandRow(overrides: Record<string, unknown>) {
+      return {
+        id: 'brand-1',
+        ownerId: 'owner',
+        name: 'Void Studio',
+        slug: 'void-studio',
+        logoUrl: null,
+        coverUrl: null,
+        isVerified: false,
+        verifiedAt: null,
+        followersCount: 0,
+        isActive: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        profile: null,
+        categories: [],
+        members: [],
+        ...overrides,
+      };
+    }
+
+    it('queries only active brands the user owns or is a member of', async () => {
+      await service.findMine(buildUser('editor'));
+
+      expect(prisma.brand.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            isActive: true,
+            OR: [
+              { ownerId: 'editor' },
+              { members: { some: { userId: 'editor' } } },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('returns the effective role, OWNER for the legal owner', async () => {
+      prisma.brand.findMany.mockResolvedValue([
+        brandRow({ id: 'own', ownerId: 'me', members: [] }),
+        brandRow({
+          id: 'team',
+          ownerId: 'other',
+          members: [{ role: 'EDITOR' }],
+        }),
+      ]);
+
+      const brands = await service.findMine(buildUser('me'));
+
+      expect(brands.map((brand) => [brand.id, brand.role])).toEqual([
+        ['own', 'OWNER'],
+        ['team', 'EDITOR'],
+      ]);
+      expect(brands[0]).not.toHaveProperty('members');
+    });
   });
 });

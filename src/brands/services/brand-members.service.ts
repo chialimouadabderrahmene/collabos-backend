@@ -13,7 +13,11 @@ import {
   UpdateBrandMemberDto,
 } from '../dto/brand-member.dto';
 import { MessageResponse } from '../types/brand-response.types';
-import { BrandMemberResponse } from '../types/brand-member-response.types';
+import { toBrandResponse } from '../mappers/brand.mapper';
+import {
+  BrandMemberResponse,
+  MyBrandResponse,
+} from '../types/brand-member-response.types';
 import { brandRoleAtLeast } from '../utils/brand-role.util';
 import { BrandAccess, BrandAccessService } from './brand-access.service';
 
@@ -40,6 +44,33 @@ export class BrandMembersService {
     private readonly prisma: PrismaService,
     private readonly brandAccess: BrandAccessService,
   ) {}
+
+  /**
+   * Active brands the user belongs to (as legal owner or team member), with
+   * their effective role — the entry point for brand-scoped workspaces.
+   */
+  async findMine(user: AuthenticatedUser): Promise<MyBrandResponse[]> {
+    const brands = await this.prisma.brand.findMany({
+      where: {
+        isActive: true,
+        OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+      },
+      include: {
+        profile: true,
+        categories: true,
+        members: { where: { userId: user.id }, select: { role: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return brands.map(({ members, ...brand }) => ({
+      ...toBrandResponse(brand),
+      role:
+        brand.ownerId === user.id
+          ? BrandMemberRole.OWNER
+          : (members[0]?.role ?? BrandMemberRole.VIEWER),
+    }));
+  }
 
   async list(
     brandId: string,
