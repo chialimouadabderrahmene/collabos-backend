@@ -92,3 +92,55 @@ Never prints or logs a secret — everything it touches lives in
   `migrate deploy`.
 - Containers/volumes are never deleted by any script here — rollback
   never needs to recreate Postgres/Redis from scratch unless you choose to.
+
+## Caddy runtime-config drift (READ BEFORE ANY CADDY RESTART)
+
+The shared reverse proxy on the VPS is `medismart-web-caddy-1`, owned by a
+different project. CollabOS adds one isolated block (`api.neao.online`) to
+that project's Caddyfile at `/opt/medismart-web-full/ops/Caddyfile`.
+
+**Current state is intentionally not consistent — three copies exist:**
+
+| Copy | Path | Content |
+|---|---|---|
+| Host file (**source of truth**) | `/opt/medismart-web-full/ops/Caddyfile` | Corrected: CollabOS upstream `172.21.0.1:3002`, no `header_up Connection/Upgrade` lines |
+| **Running config** | `/config/Caddyfile.active` inside the container (`/var/lib/docker/volumes/medismart-web_caddy_config/_data/Caddyfile.active` on the host) | Byte-identical copy of the host file, loaded with `caddy reload --config /config/Caddyfile.active --adapter caddyfile` |
+| Container's `/etc/caddy/Caddyfile` | read-only single-file bind mount | **Stale** — still the old inode from before the edit (upstream `127.0.0.1:3002`, which Caddy cannot reach). Not what Caddy is running. |
+
+**Why:** editing the host file with `sed -i` replaced its inode; a Docker
+single-file bind mount keeps pointing at the old one, so the container
+never saw the fix. Fixing that properly means recreating/restarting the
+Caddy container, which would cause downtime for other projects' sites
+(medismart, adraea). A graceful `caddy reload` from a copy in Caddy's own
+`/config` volume was used instead, deliberately, to avoid any downtime.
+
+**Consequences / rules:**
+- A normal `docker restart medismart-web-caddy-1` (or recreate) re-resolves
+  the bind mount by path and will load the **corrected host file** — that is
+  the desired outcome, and nothing else needs to change first.
+- Until then, anyone running the *default* reload
+  (`caddy reload --config /etc/caddy/Caddyfile`) would load the **stale**
+  file and silently break `api.neao.online` (503). Use the host file's
+  content via the `/config` copy, or restart the container in a maintenance
+  window instead.
+- If the host Caddyfile is edited again, re-copy it to `Caddyfile.active`,
+  `caddy validate`, then `caddy reload` — and prefer in-place writes
+  (`>>`, `cat >`), not `sed -i`/editors that replace the inode.
+- Verify drift any time: compare md5 of the three files above; host and
+  `Caddyfile.active` must match, the third will not until a restart.
+- Do **not** add `header_up Connection {>Connection}` / `header_up Upgrade
+  {>Upgrade}` to the CollabOS block: they blank the upgrade headers after
+  Caddy's hop-by-hop stripping and break socket.io WebSockets (verified:
+  engine.io "code 3 Bad request" with them, `101 Switching Protocols`
+  without). `reverse_proxy` proxies upgrades natively.
+
+## Port 3002 isolation (defense in depth)
+
+The API binds to the proxy bridge gateway IP only (`COLLABOS_API_BIND_HOST`),
+which limits the destination address but not the source; Docker-published
+ports also sidestep UFW. `ops/collabos-fw.sh` (run at boot by
+`collabos-fw.service`) therefore adds tagged (`collabos-api-3002`) INPUT and
+DOCKER-USER rules: only the proxy's bridge and the host itself may reach the
+port. Verified: proxy container reaches it, an unrelated container is
+rejected, external access is unreachable. Note the DOCKER-USER rule matches
+`--ctdir ORIGINAL` — without it reply packets are dropped too.
