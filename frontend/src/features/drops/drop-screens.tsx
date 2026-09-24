@@ -30,6 +30,7 @@ import {
 import { ApiError } from "@/lib/api/http";
 import { queryKeys } from "@/lib/api/query-keys";
 import { formatDate, formatMoney, formatRelative } from "@/lib/utils/format";
+import { safeHref } from "@/lib/utils/safe-url";
 import { CURRENCIES } from "@/lib/validation/deals";
 
 const apiMessage = (error: unknown) => (error instanceof ApiError ? error.message : undefined);
@@ -290,7 +291,7 @@ function PageForm({ dropId, page, images }: { dropId: string; page: DropPage; im
   });
   const set = (key: keyof typeof values) => (event: { target: { value: string } }) =>
     setValues((current) => ({ ...current, [key]: event.target.value }));
-  const ctaInvalid = values.ctaUrl !== "" && !/^https?:\/\//i.test(values.ctaUrl);
+  const ctaInvalid = values.ctaUrl !== "" && !safeHref(values.ctaUrl);
   const save = useMutation({
     mutationFn: () => dropsApi.updatePage(dropId, values),
     onSuccess: (updated) => {

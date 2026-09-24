@@ -5,21 +5,11 @@ import { Wordmark } from "@/components/brand/logo";
 import { Avatar, Eyebrow } from "@/components/ui/display";
 import { fetchPublicDrop } from "@/lib/api/drops.server";
 import { formatDate, formatMoney } from "@/lib/utils/format";
+import { safeHref } from "@/lib/utils/safe-url";
 
 type Props = { params: Promise<{ slug: string }> };
 
 export const dynamic = "force-dynamic";
-
-/** Only http(s) links are rendered as clickable CTAs. */
-function safeHref(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;

@@ -3,6 +3,13 @@ import type { NextConfig } from "next";
 
 const apiUrl = (process.env.API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
+// NEXT_PUBLIC_* values are inlined into the browser bundle. Refuse to build
+// if a Stripe *secret* or restricted key was put there by mistake.
+const stripePublic = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+if (stripePublic && !stripePublic.startsWith("pk_")) {
+  throw new Error("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must be a publishable key (pk_...), never a secret key.");
+}
+
 const nextConfig: NextConfig = {
   // The app lives in frontend/ inside the backend repository; pin the
   // workspace root so the backend's lockfile is never picked up.

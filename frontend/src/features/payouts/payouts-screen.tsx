@@ -48,7 +48,7 @@ const TRANSACTION_COPY: Record<TransactionType, string> = {
 };
 
 /** Only follow onboarding links to Stripe over HTTPS. */
-function isStripeUrl(url: string): boolean {
+export function isStripeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === "https:" && (parsed.hostname === "stripe.com" || parsed.hostname.endsWith(".stripe.com"));
