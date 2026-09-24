@@ -99,11 +99,24 @@ services:
     networks:
       - collabos-internal
     ports:
-      # Bind to loopback only — the host's reverse proxy reaches this over
-      # 127.0.0.1, nothing public binds here directly. Default is 3002, not
-      # 3000/3001 — both already taken by other projects on the target VPS
-      # (see docs/vps-deployment-audit.md). Override per-host if needed.
-      - "127.0.0.1:${COLLABOS_API_HOST_PORT:-3002}:3000"
+      # COLLABOS_API_BIND_HOST defaults to loopback (safe everywhere, matches
+      # any local/dev use of this file). On a host where the reverse proxy
+      # itself runs in its own Docker container (this VPS: Caddy, owned by a
+      # different project), 127.0.0.1 as seen INSIDE that container is its
+      # own loopback, not the host's — Caddy cannot reach it there. The fix
+      # is binding this port to the specific host IP of the proxy's Docker
+      # bridge gateway instead (set in .env.production, not here — this file
+      # stays host-agnostic). Binding to a specific IP, not 0.0.0.0, is what
+      # actually guarantees privacy: the kernel only accepts connections
+      # addressed to that exact IP, so traffic arriving at the VPS's public
+      # IP is refused at the socket level regardless of how Docker's own
+      # iptables rules interact with UFW's — not something a UFW rule alone
+      # can be trusted to guarantee (Docker-published ports are well known to
+      # bypass UFW's chain depending on host config). A scoped UFW rule is
+      # added on top as defense in depth, not as the sole mechanism.
+      # Default is 3002, not 3000/3001 — both already taken by other
+      # projects on the target VPS (see docs/vps-deployment-audit.md).
+      - "${COLLABOS_API_BIND_HOST:-127.0.0.1}:${COLLABOS_API_HOST_PORT:-3002}:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health/live',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
