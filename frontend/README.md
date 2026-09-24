@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CollabOS frontend
 
-## Getting Started
+Next.js (App Router) client for the CollabOS API in the parent directory.
 
-First, run the development server:
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # set API_URL to the backend origin
+npm ci
+npm run dev -- --port 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The backend's `CLIENT_URL` / `CORS_ORIGIN` should point at this app (emailed
+reset/verify links use `CLIENT_URL`). Stripe Connect return/refresh URLs should
+point at `/payouts`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Dev server (Turbopack) |
+| `npm run build` / `start` | Production build / server |
+| `npm run lint` | ESLint (incl. React Compiler rules) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run test` | Vitest + Testing Library (jsdom) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
 
-## Learn More
+| Variable | Exposure | Notes |
+|---|---|---|
+| `API_URL` | server only | Backend origin. Never `NEXT_PUBLIC_`. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | browser | Publishable key (`pk_…`) only; the build fails on anything else. Empty disables in-app card payments. |
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **BFF auth.** `/api/auth/[action]` exchanges credentials with the backend and
+  stores access/refresh tokens in httpOnly cookies (`cos_at`, `cos_rt`) plus a
+  non-secret `cos_session` flag used only for route gating. Browser JS never
+  sees a token.
+- **API proxy.** `/api/backend/[...path]` forwards to `${API_URL}/v1/…`,
+  attaching the bearer server-side, refreshing once on 401 (single-flight per
+  instance — use sticky sessions or a shared lock when running several
+  instances, because refresh tokens rotate). It refuses token-issuing auth
+  routes and dot-segment paths and never forwards `set-cookie`.
+- **Authorization.** `src/proxy.ts` gating and role checks in components are
+  UX only; the backend authorizes every request.
+- **Server state** lives in TanStack Query (`src/lib/api/query-keys.ts`);
+  Zustand holds UI state only (active brand id, studio panels, toasts).
+- **Documents.** Opportunity drafts are Tiptap JSON (`schemaVersion 1`) with
+  assets referenced as `asset:<uuid>`; one `DocumentRenderer` (no raw HTML)
+  serves preview, versions and public share pages.
+- **Public pages.** `/share/[token]` and `/d/[slug]` are server-rendered from
+  public endpoints and fail closed.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+```
+src/app          routes: (auth) (onboarding) (dashboard) (studio), share/, d/, api/
+src/components   ui/ design system, navigation/, editorial/ renderer, domain/ cards
+src/features     one folder per product area (screens + hooks)
+src/lib          api/ typed clients, auth/ BFF session, validation/ zod, utils/
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `../docs/frontend-audit.md`, `../docs/frontend-backend-gaps.md` and
+`../docs/ui-implementation-status.md`.
