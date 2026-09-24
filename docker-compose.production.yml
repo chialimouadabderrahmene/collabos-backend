@@ -90,10 +90,11 @@ services:
     networks:
       - collabos-internal
     ports:
-      # Bind to loopback only — Nginx on the host proxies to this from
-      # 127.0.0.1, nothing public binds here directly. Change the host port
-      # if 3000 is already taken by another project on this VPS.
-      - "127.0.0.1:${COLLABOS_API_HOST_PORT:-3000}:3000"
+      # Bind to loopback only — the host's reverse proxy reaches this over
+      # 127.0.0.1, nothing public binds here directly. Default is 3002, not
+      # 3000/3001 — both already taken by other projects on the target VPS
+      # (see docs/vps-deployment-audit.md). Override per-host if needed.
+      - "127.0.0.1:${COLLABOS_API_HOST_PORT:-3002}:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health/live',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
