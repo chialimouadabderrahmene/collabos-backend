@@ -50,6 +50,15 @@ services:
     # --requirepass keeps Redis authenticated even though it's already
     # internal-only, as defense in depth on a shared host.
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      # The `command:` line above is substituted by Compose at parse time
+      # (from --env-file), so redis-server itself gets the real password
+      # regardless of this. This is separate and purely for the healthcheck
+      # below, which runs `redis-cli` *inside* the running container and
+      # needs REDIS_PASSWORD as an actual process env var there to expand
+      # $$REDIS_PASSWORD — without this the healthcheck silently tries an
+      # empty password and fails with WRONGPASS forever.
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - collabos_redis_data:/data
     networks:
