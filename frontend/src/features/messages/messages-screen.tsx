@@ -17,6 +17,7 @@ import { toast } from "@/components/ui/toast";
 import { useSession } from "@/features/auth/hooks";
 import { useMyBrands } from "@/features/brands/workspace";
 import { brandsApi } from "@/lib/api/brands";
+import { dealsApi } from "@/lib/api/deals";
 import { ApiError } from "@/lib/api/http";
 import {
   MESSAGE_ATTACHMENT_TYPES,
@@ -39,7 +40,7 @@ const LIST_POLL_MS = 15_000;
 /**
  * The backend exposes participant ids only (no names) — documented gap. We
  * title a conversation by its context instead: a BRAND thread shows the
- * brand, and flags inquiries to a brand I work on.
+ * brand (flagging inquiries to a brand I work on), a DEAL thread the deal.
  */
 export function useConversationTitle(conversation: Conversation | undefined) {
   const brandId = conversation?.contextType === "BRAND" ? conversation.contextId : null;
@@ -50,6 +51,13 @@ export function useConversationTitle(conversation: Conversation | undefined) {
     enabled: !!brandId,
     staleTime: 5 * 60_000,
   });
+  const dealId = conversation?.contextType === "DEAL" ? conversation.contextId : null;
+  const deal = useQuery({
+    queryKey: queryKeys.deals.detail(dealId ?? ""),
+    queryFn: () => dealsApi.get(dealId as string),
+    enabled: !!dealId,
+    staleTime: 5 * 60_000,
+  });
 
   if (!conversation) return { title: "", subtitle: undefined as string | undefined };
   if (brandId) {
@@ -58,6 +66,9 @@ export function useConversationTitle(conversation: Conversation | undefined) {
     return mine
       ? { title: `Inquiry · ${name}`, subtitle: "Someone reached out to your brand" }
       : { title: name, subtitle: "Brand conversation" };
+  }
+  if (dealId) {
+    return { title: deal.data?.title ?? "Deal", subtitle: "Deal conversation" };
   }
   const context = conversation.contextType
     ? `${conversation.contextType.charAt(0)}${conversation.contextType.slice(1).toLowerCase()} conversation`
