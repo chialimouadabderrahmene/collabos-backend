@@ -2,6 +2,11 @@
 export const queryKeys = {
   session: ["session"] as const,
   profile: ["users", "me"] as const,
+  userSettings: ["users", "me", "settings"] as const,
+  userPreferences: ["users", "me", "preferences"] as const,
+  userNotifications: ["users", "me", "notifications"] as const,
+  userPrivacy: ["users", "me", "privacy"] as const,
+  notifications: (query: object) => ["notifications", query] as const,
 
   brands: {
     mine: ["brands", "mine"] as const,

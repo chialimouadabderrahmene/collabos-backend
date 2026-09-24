@@ -69,6 +69,9 @@ export function LoginForm() {
             />
           )}
         </Field>
+        <Link href="/forgot-password" className="-mt-2 self-end text-caption font-semibold text-muted hover:text-fg">
+          Forgot password?
+        </Link>
       </div>
 
       {errors.root && (

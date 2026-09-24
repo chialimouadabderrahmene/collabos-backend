@@ -6,7 +6,15 @@ import { SESSION_FLAG_COOKIE } from "@/lib/auth/constants";
  * signed-in users skip the auth screens. The backend authorises every API
  * call regardless — this never grants access to data.
  */
-const PUBLIC_PREFIXES = ["/login", "/register", "/forgot-password", "/share", "/d"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/share",
+  "/d",
+];
 const AUTH_SCREENS = ["/login", "/register"];
 
 export function proxy(request: NextRequest) {

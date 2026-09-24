@@ -41,4 +41,8 @@ export const authApi = {
   me: () => http.get<SessionUser>("auth/me"),
   forgotPassword: (email: string) =>
     http.post<{ message: string }>("auth/forgot-password", { email }),
+  /** Tokens come from emailed links; they are sent once and never stored. */
+  resetPassword: (token: string, newPassword: string) =>
+    http.post<{ message: string }>("auth/reset-password", { token, newPassword }),
+  verifyEmail: (token: string) => http.post<{ message: string }>("auth/verify-email", { token }),
 };
