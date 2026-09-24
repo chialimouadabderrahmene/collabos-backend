@@ -19,6 +19,16 @@ describe("BFF proxy", () => {
     },
   );
 
+  it("maps an upstream timeout to 504 and an unreachable upstream to 502", async () => {
+    vi.mocked(backendFetch).mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"));
+    const timedOut = await GET(new NextRequest("http://localhost/api/backend/x"), ctx(["health"]));
+    expect(timedOut.status).toBe(504);
+
+    vi.mocked(backendFetch).mockRejectedValueOnce(new TypeError("fetch failed"));
+    const unreachable = await GET(new NextRequest("http://localhost/api/backend/x"), ctx(["health"]));
+    expect(unreachable.status).toBe(502);
+  });
+
   it("rejects unsafe path segments", async () => {
     const response = await GET(new NextRequest("http://localhost/api/backend/x"), ctx(["..", "health"]));
     expect(response.status).toBe(400);

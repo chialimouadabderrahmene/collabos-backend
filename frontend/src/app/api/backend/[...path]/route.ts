@@ -59,7 +59,13 @@ async function handle(request: NextRequest, context: RouteContext): Promise<Resp
       headers: request.headers,
       body,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      return NextResponse.json(
+        { statusCode: 504, code: "GATEWAY_TIMEOUT", message: "The CollabOS API took too long to respond" },
+        { status: 504 },
+      );
+    }
     return NextResponse.json(
       { statusCode: 502, code: "BAD_GATEWAY", message: "The CollabOS API is unreachable" },
       { status: 502 },

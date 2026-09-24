@@ -40,14 +40,20 @@ function buildHeaders(source: Headers | undefined, accessToken?: string): Header
   return headers;
 }
 
+/** Upstream deadline. Uploads (multipart) get longer than JSON calls. */
+const TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 function send(request: BackendRequest, accessToken?: string): Promise<Response> {
   const hasBody = request.body && !["GET", "HEAD"].includes(request.method);
+  const isUpload = request.headers?.get("content-type")?.startsWith("multipart/") ?? false;
   return fetch(`${serverEnv.apiUrl}/v1/${request.path}${request.search ?? ""}`, {
     method: request.method,
     headers: buildHeaders(request.headers, accessToken),
     body: hasBody ? request.body : undefined,
     cache: "no-store",
     redirect: "manual",
+    signal: AbortSignal.timeout(isUpload ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS),
   });
 }
 

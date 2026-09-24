@@ -101,6 +101,7 @@ export function refreshTokens(refreshToken: string): Promise<SessionTokens | nul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
         cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
       });
       if (!response.ok) {
         return null;

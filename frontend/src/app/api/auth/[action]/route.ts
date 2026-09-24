@@ -37,6 +37,7 @@ async function forwardCredentials(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
     });
   } catch {
     return NextResponse.json(
@@ -65,6 +66,7 @@ async function logout(): Promise<Response> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
       cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     }).catch(() => undefined);
   }
   await clearSession();

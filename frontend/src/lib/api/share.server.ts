@@ -24,6 +24,7 @@ export const fetchSharedOpportunity = cache(async (token: string): Promise<Share
   try {
     const response = await fetch(`${serverEnv.apiUrl}/v1/share/${encodeURIComponent(token)}`, {
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
     });
     if (response.ok) {
       return { status: "ok", data: (await response.json()) as SharedOpportunity };
