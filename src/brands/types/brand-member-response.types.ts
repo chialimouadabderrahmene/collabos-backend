@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BrandMemberRole } from '@prisma/client';
+import { BrandResponse } from './brand-response.types';
 
 export class BrandMemberResponse {
   @ApiProperty()
@@ -19,4 +20,10 @@ export class BrandMemberResponse {
 
   @ApiProperty()
   createdAt!: Date;
+}
+
+/** A brand the current user belongs to, with their effective role. */
+export class MyBrandResponse extends BrandResponse {
+  @ApiProperty({ enum: BrandMemberRole })
+  role!: BrandMemberRole;
 }
