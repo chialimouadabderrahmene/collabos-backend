@@ -24,7 +24,8 @@ RUN npm ci --omit=dev \
 
 COPY --from=build /app/dist ./dist
 
-RUN addgroup -S nodejs && adduser -S nestjs -G nodejs \n RUN addgroup -S nodejs && adduser -S nestjs -G nodejsRUN addgroup -S nodejs && adduser -S nestjs -G nodejs mkdir -p /app/uploads && chown nestjs:nodejs /app/uploads
+RUN addgroup -S nodejs && adduser -S nestjs -G nodejs \
+ && mkdir -p /app/uploads && chown nestjs:nodejs /app/uploads
 USER nestjs
 
 EXPOSE 3000
