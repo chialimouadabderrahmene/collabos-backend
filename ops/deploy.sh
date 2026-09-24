@@ -44,6 +44,9 @@ if [ -z "$NET" ]; then
 fi
 docker run --rm --network "$NET" --env-file "$ENV_FILE" collabos-backend:latest npx prisma migrate deploy
 
+echo "[deploy] ensuring seed rows (roles/permissions/categories; upserts only)..."
+docker run --rm -i --network "$NET" --env-file "$ENV_FILE" collabos-backend:latest node - < ops/seed.js
+
 echo "[deploy] recreating collabos-api only (postgres/redis untouched)..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --force-recreate collabos-api
 
