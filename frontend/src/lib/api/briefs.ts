@@ -30,7 +30,23 @@ export interface ListBriefsQuery {
   isRemote?: boolean;
 }
 
+export interface BriefInput {
+  brandId: string;
+  title: string;
+  description: string;
+  budgetMin?: number;
+  budgetMax?: number;
+  currency?: string;
+  deliverables?: string[];
+  applicationDeadline?: string;
+  location?: string;
+  isRemote?: boolean;
+}
+
 export const briefsApi = {
   list: (query: ListBriefsQuery = {}) => http.get<Paginated<Brief>>("briefs", { ...query }),
   get: (id: string) => http.get<Brief>(`briefs/${id}`),
+  create: (input: BriefInput) => http.post<Brief>("briefs", input),
+  close: (id: string) => http.post<Brief>(`briefs/${id}/close`),
+  archive: (id: string) => http.post<Brief>(`briefs/${id}/archive`),
 };
