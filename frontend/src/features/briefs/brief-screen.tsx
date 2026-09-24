@@ -293,7 +293,7 @@ export function BriefScreen({ briefId }: { briefId: string }) {
   return (
     <PageContainer size="lg">
       <BackLink href="/explore" />
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <article>
           {brand.data && (
             <Link href={`/explore/brands/${brand.data.id}`} className="mb-4 inline-flex items-center gap-2.5">

@@ -146,7 +146,7 @@ export function OpportunityOverview({ opportunityId }: { opportunityId: string }
         </Card>
       )}
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-10">
           <section aria-labelledby="published">
             <SectionHeader

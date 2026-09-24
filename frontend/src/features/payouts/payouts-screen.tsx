@@ -272,7 +272,7 @@ export function PayoutsScreen() {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Tabs defaultValue="payouts">
           <TabsList className="mb-5">
             <TabsTrigger value="payouts">Withdrawals</TabsTrigger>

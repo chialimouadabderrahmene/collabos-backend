@@ -33,11 +33,14 @@ const apiMessage = (error: unknown) => (error instanceof ApiError ? error.messag
 const isWhole = (value: string, max = 10_000_000) => /^\d+$/.test(value) && Number(value) <= max;
 const orUndefined = (value: string) => (value.trim() === "" ? undefined : value.trim());
 
-/** UX hint only: the backend authorizes every catalog change. */
+/** UX hint only: the backend authorizes every catalog change. `resolved`
+ * stays false until we know, so the wrong view never flashes. */
 function useIsProductOwner(product: Product | undefined) {
   const session = useSession();
   const brands = useMyBrands();
-  return !!product && !!brands.data?.some((brand) => brand.id === product.brandId && brand.ownerId === session.data?.id);
+  const resolved = !session.isLoading && !brands.isLoading;
+  const isOwner = !!product && !!brands.data?.some((brand) => brand.id === product.brandId && brand.ownerId === session.data?.id);
+  return { isOwner, resolved };
 }
 
 export function ProductCard({ product, href }: { product: Product; href: string }) {
@@ -125,7 +128,7 @@ export function ProductsList() {
       ) : (
         <>
           <Card className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-left text-body">
+            <table className="w-full text-left text-body sm:min-w-[36rem]">
               <thead className="border-b border-border text-label text-muted uppercase">
                 <tr>
                   <th scope="col" className="px-4 py-3 font-normal">Product</th>
@@ -402,29 +405,29 @@ function VariantsEditor({ product }: { product: Product }) {
         <ErrorState title="Couldn't load variants" onRetry={() => variants.refetch()} />
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left text-body">
+          <table className="w-full text-left text-body sm:min-w-[34rem]">
             <thead className="border-b border-border text-label text-muted uppercase">
               <tr>
-                <th scope="col" className="px-4 py-3 font-normal">SKU</th>
-                <th scope="col" className="px-4 py-3 font-normal">Size / colour</th>
-                <th scope="col" className="px-4 py-3 font-normal">Price</th>
-                <th scope="col" className="px-4 py-3 font-normal">Stock</th>
-                <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
+                <th scope="col" className="px-2.5 py-3 sm:px-4 font-normal">SKU</th>
+                <th scope="col" className="px-2.5 py-3 sm:px-4 font-normal">Size / colour</th>
+                <th scope="col" className="px-2.5 py-3 sm:px-4 font-normal">Price</th>
+                <th scope="col" className="px-2.5 py-3 sm:px-4 font-normal">Stock</th>
+                <th scope="col" className="px-2.5 py-3 sm:px-4"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {variants.data?.map((variant) => (
                 <tr key={variant.id}>
-                  <td className="px-4 py-3 font-semibold text-fg">{variant.sku}</td>
-                  <td className="px-4 py-3 text-fg-2">{[variant.size, variant.color].filter(Boolean).join(" / ") || "—"}</td>
-                  <td className="tabular px-4 py-3 text-fg-2">{formatMoney(variant.effectivePrice, product.currency)}</td>
-                  <td className="tabular px-4 py-3">
+                  <td className="px-2.5 py-3 sm:px-4 font-semibold text-fg">{variant.sku}</td>
+                  <td className="px-2.5 py-3 sm:px-4 text-fg-2">{[variant.size, variant.color].filter(Boolean).join(" / ") || "—"}</td>
+                  <td className="tabular px-2.5 py-3 sm:px-4 text-fg-2">{formatMoney(variant.effectivePrice, product.currency)}</td>
+                  <td className="tabular px-2.5 py-3 sm:px-4">
                     <button type="button" onClick={() => setStockFor(variant)} className="font-semibold text-accent hover:text-accent-hover">
                       {variant.stockQuantity}
                       <span className="sr-only"> — adjust stock for {variant.sku}</span>
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-2.5 py-3 sm:px-4 text-right">
                     <button
                       type="button"
                       aria-label={`Remove variant ${variant.sku}`}
@@ -587,7 +590,7 @@ function OwnerProductView({ product }: { product: Product }) {
           </Button>
         )}
       </header>
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex flex-col gap-10">
           <VariantsEditor product={product} />
           <MediaEditor productId={product.id} />
@@ -664,7 +667,7 @@ function ShopperProductView({ product }: { product: Product }) {
   return (
     <PageContainer size="lg">
       <BackLink href={brand.data ? `/explore/brands/${brand.data.id}` : "/explore"} />
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-2">
         <div>
           <div className="aspect-[4/5] overflow-hidden rounded-xl border border-border bg-surface-2">
             {images[imageIndex] ? (
@@ -780,8 +783,8 @@ function ShopperProductView({ product }: { product: Product }) {
 
 export function ProductScreen({ productId }: { productId: string }) {
   const product = useQuery({ queryKey: queryKeys.products.detail(productId), queryFn: () => productsApi.get(productId) });
-  const isOwner = useIsProductOwner(product.data);
-  if (product.isLoading) return <LoadingState />;
+  const { isOwner, resolved } = useIsProductOwner(product.data);
+  if (product.isLoading || !resolved) return <LoadingState />;
   if (product.isError || !product.data) {
     return (
       <PageContainer>

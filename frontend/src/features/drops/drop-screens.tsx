@@ -717,7 +717,7 @@ export function DropScreen({ dropId }: { dropId: string }) {
         </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <Tabs defaultValue="page">
           <TabsList className="mb-6 overflow-x-auto">
             <TabsTrigger value="page">Page</TabsTrigger>

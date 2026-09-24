@@ -136,7 +136,7 @@ export function SalesScreen() {
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <Card className="p-5">
               <SectionHeader title="Revenue" />
               {revenue.isLoading ? (

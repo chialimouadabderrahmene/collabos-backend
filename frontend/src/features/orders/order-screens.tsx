@@ -126,7 +126,7 @@ export function CartScreen() {
   return (
     <PageContainer size="lg">
       <PageHeader title="Bag" subtitle={`${items.reduce((sum, item) => sum + item.quantity, 0)} items`} />
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Card className="divide-y divide-border self-start">
           {items.map((item) => (
             <div key={item.id} className="flex flex-wrap items-center gap-3 px-4 py-4">
@@ -722,7 +722,7 @@ export function OrderScreen({ orderId }: { orderId: string }) {
         )}
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-8">
           <section>
             <SectionHeader title="Items" />
