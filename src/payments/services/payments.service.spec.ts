@@ -171,6 +171,35 @@ describe('PaymentsService', () => {
       );
     });
 
+    it('never charges Stripe in a different currency than the order (EUR order)', async () => {
+      prisma.order.findUnique.mockResolvedValue(
+        buildOrder({ subtotal: 840, currency: 'EUR' }),
+      );
+      prisma.brand.findUnique.mockResolvedValue({
+        id: 'brand-1',
+        ownerId: 'owner-1',
+      });
+      prisma.payment.create.mockResolvedValue(
+        buildPayment({ amount: 840, currency: 'EUR' }),
+      );
+
+      await service.createForOrder('order-1', buildUser());
+
+      expect(stripeService.createPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 84000, currency: 'EUR' }),
+      );
+      expect(stripeService.createPaymentIntent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ currency: 'USD' }),
+      );
+      expect(prisma.payment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          currency: 'EUR',
+          amount: 840,
+        }) as Record<string, unknown>,
+        include: { splits: true },
+      });
+    });
+
     it('splits 10% platform fee and 90% to the brand owner', async () => {
       prisma.order.findUnique.mockResolvedValue(buildOrder());
       prisma.brand.findUnique.mockResolvedValue({
