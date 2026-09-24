@@ -38,13 +38,19 @@ rule ACCEPT -p tcp -d "$BIND" --dport "$PORT" -i "$IFACE" -s "$SUBNET"
 
 # Traffic from another container's bridge to a *published* port is DNAT'd by
 # Docker and takes the FORWARD path (chain DOCKER-USER), where the INPUT
-# rules above never see it. Match on the ORIGINAL destination (pre-DNAT) so
-# this only ever affects traffic aimed at this API's published port, and
-# drop it unless it arrived on the proxy's bridge.
-iptables -C DOCKER-USER -p tcp -m conntrack --ctorigdst "$BIND" --ctorigdstport "$PORT" \
-  ! -i "$IFACE" -m comment --comment "$TAG" -j DROP 2>/dev/null \
-  || iptables -I DOCKER-USER 1 -p tcp -m conntrack --ctorigdst "$BIND" --ctorigdstport "$PORT" \
-       ! -i "$IFACE" -m comment --comment "$TAG" -j DROP
+# rules above never see it. Match on the ORIGINAL destination (pre-DNAT) and
+# only the ORIGINAL direction (replies come back from the API's own bridge
+# and must not be dropped), so this only ever affects new requests aimed at
+# this API's published port that didn't arrive on the proxy's bridge.
+# Rebuilt on every run: delete any existing rules carrying our tag first, so
+# a changed definition can't leave a stale rule behind.
+while iptables -S DOCKER-USER | grep -q -- "--comment $TAG"; do
+  N="$(iptables -L DOCKER-USER --line-numbers -n | awk -v t="$TAG" '$0 ~ t {print $1; exit}')"
+  iptables -D DOCKER-USER "$N"
+done
+iptables -I DOCKER-USER 1 -p tcp \
+  -m conntrack --ctorigdst "$BIND" --ctorigdstport "$PORT" --ctdir ORIGINAL \
+  ! -i "$IFACE" -m comment --comment "$TAG" -j DROP
 
 echo "[collabos-fw] rules for port $PORT:"
 iptables -S INPUT | grep "$TAG"
