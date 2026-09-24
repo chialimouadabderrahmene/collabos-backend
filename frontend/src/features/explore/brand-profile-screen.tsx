@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, Badge, Card, Eyebrow, Progress, SectionHeader, Stat, Tag } from "@/components/ui/display";
 import { EmptyState, ErrorState, Skeleton, SkeletonList } from "@/components/ui/feedback";
 import { useStartBrandConversation } from "@/features/messages/use-start-conversation";
+import { BrandShop } from "@/features/products/product-screens";
 import { insightsApi } from "@/lib/api/ai";
 import { brandsApi, type Brand } from "@/lib/api/brands";
 import { briefsApi } from "@/lib/api/briefs";
@@ -200,11 +201,21 @@ export function BrandProfileScreen({ brandId }: { brandId: string }) {
         )}
       </section>
 
+      <BrandShop brandId={data.id} />
+
       <div className="safe-bottom fixed inset-x-0 bottom-16 z-30 border-t border-border bg-bg/95 px-4 pt-3 pb-3 backdrop-blur-md lg:static lg:mt-8 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <Button asChild size="lg" fullWidth>
-            <Link href={`/proposals/new?brandId=${data.id}`}>Propose Collaboration</Link>
-          </Button>
+          {/* No direct brand-proposal endpoint exists: proposals are sent on a
+              brief; without one, the pitch starts as a conversation. */}
+          {openBriefs[0] ? (
+            <Button asChild size="lg" fullWidth>
+              <Link href={`/briefs/${openBriefs[0].id}`}>Propose Collaboration</Link>
+            </Button>
+          ) : (
+            <Button size="lg" fullWidth loading={startConversation.isPending} onClick={() => startConversation.mutate(data)}>
+              Propose Collaboration
+            </Button>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="secondary"
