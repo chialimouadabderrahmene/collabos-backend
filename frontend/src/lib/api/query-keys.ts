@@ -81,6 +81,13 @@ export const queryKeys = {
     report: (query: object) => ["payouts", "report", query] as const,
   },
 
+  analytics: {
+    report: (query: object) => ["analytics", "report", query] as const,
+    revenue: (query: object) => ["analytics", "revenue", query] as const,
+    traffic: (query: object) => ["analytics", "traffic", query] as const,
+    prediction: (brandId: string) => ["analytics", "prediction", brandId] as const,
+  },
+
   messages: {
     conversations: ["messages", "conversations"] as const,
     conversation: (id: string) => ["messages", "conversations", id] as const,

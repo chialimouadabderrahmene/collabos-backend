@@ -80,6 +80,19 @@ export interface BrandMatch {
   cached: boolean;
 }
 
+export interface RevenuePrediction {
+  brandId: string;
+  trend: "up" | "down" | "flat";
+  history: Array<{ period: string; amount: number }>;
+  predicted: Array<{ period: string; amount: number }>;
+  currency: string;
+  narrative: string;
+  /** false = heuristic fallback (AI not configured). */
+  generatedByAi: boolean;
+  cached: boolean;
+}
+
 export const insightsApi = {
   brandMatch: (brandId: string) => http.get<BrandMatch>(`ai/brand-match/${brandId}`),
+  revenuePrediction: (brandId: string) => http.get<RevenuePrediction>(`ai/revenue-prediction/${brandId}`),
 };
