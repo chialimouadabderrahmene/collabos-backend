@@ -18,7 +18,9 @@ inconsistent authorization model; **Low** = UX/performance.
 
 ## High severity — recommend fixing before launch
 
-### 2. Checkout ignores product currency (orders always `USD`)
+### 2. Checkout ignores product currency (orders always `USD`) — **fixed on the backend branch (`a608043`), verified live 2026‑09‑24**
+
+> Live result on `api.neao.online`: €420×2 → order **EUR 840**; $100×2 → **USD 200**; EUR+USD in one brand's cart → **400** (rejected, never converted); cancel restores stock. The text below is the original finding.
 
 - **Where:** `src/orders/services/checkout.service.ts` → `tx.order.create({ data: { … } })` never sets `currency`, so every order falls back to the Prisma default `USD`. Payments are then created from `order.subtotal` in the order's currency.
 - **Observed live:** a product priced €420 produced an order of **US$840** for 2 units.
@@ -54,3 +56,24 @@ inconsistent authorization model; **Low** = UX/performance.
 | 19 | Traffic analytics | `POST /analytics/track` requires a persistent `visitorId`; storing one is a tracking identifier that needs consent (EU). | Not wired yet; Sales shows "No tracked page views". Add after a consent banner exists. |
 | 20 | `GET /users/me/notifications` | Returns internal `id`/`userId` and an undocumented `inAppNotifications`. | Ignored by the UI. |
 | 21 | `GET /health` on Windows dev | Disk indicator checks path `/` → `InvalidPathError` → 500 (`/health/live` fine). | Not a frontend concern; Linux/Docker unaffected. |
+
+## Deployment findings (live verification against `api.neao.online`, 2026‑09‑24)
+
+Found while connecting the frontend to the deployed backend. "Backend branch"
+= `feature/opportunity-studio`.
+
+| # | Finding | Status |
+|---|---|---|
+| D1 | **Production DB had no seed rows** (roles `USER`/`ADMIN`, permissions, categories) → `POST /auth/register` 500 (`Expected 1 records to be connected`). `migrate deploy` does not seed. | **Fixed live** with an approved, idempotent upsert seed (`ops/seed.js`, backend commit `8d8ba31`); `ops/deploy.sh` now runs it every deploy. |
+| D2 | **Uploads volume was root-owned**; the API runs as `nestjs` (uid 100) → every asset upload 500 (`EACCES mkdir /app/uploads/storage`). | **Fixed live** (`chown 100:101` on our own `collabos_uploads` volume). Dockerfile now creates `/app/uploads` owned by `nestjs` (backend commits `cbbae18`, `2ff3bdc`) — takes effect on the next image build. |
+| D3 | **`GET /v1/brands/mine` is missing on the deployed backend.** The frontend needs it (entry 1) but commit `b0b967f` only existed on the UI branch. Home shows "Couldn't load your studio", the brand switcher/Create Opportunity cannot resolve a brand. | Cherry-picked onto the backend branch (local commit `09116c0`, 29 brand tests pass). **Needs push + redeploy — awaiting approval.** |
+| D4 | **`GET /payments/invoices` and `GET /payments/transactions` return 404 "Payment not found"**: `PaymentsController`'s `GET :id` is registered before them and swallows the literal routes. | Fix committed locally on the backend branch (controller order in `payments.module.ts`, 40 payment tests pass). **Needs push + redeploy.** |
+| D5 | **`POST /auth/register` returns 500 without working SMTP** although the user row is created (`getaddrinfo ENOTFOUND REPLACE_WITH_REAL_SMTP_HOST`). Same as entry 15; the register form retries sign-in, so it works in the UI. | Open: needs real SMTP (user-supplied) — or make the verification mail best-effort in the backend. |
+| D6 | **`POST /payments/orders` returns 500** (Stripe `PaymentIntent.create` rejects the placeholder key) rather than a 503 "not configured". The frontend maps ≥500 to "Payments aren't available right now" and never treats it as success. | Blocked on Stripe TEST keys (entered by the user directly on the VPS). |
+| D7 | **Share-link `url` has the backend's placeholder host** (`REPLACE-WITH-FRONTEND-DOMAIN.example`), and WebSocket CORS allows only that origin. | Frontend ignores `url` and builds the link from its own origin. Set backend `CLIENT_URL`/`CORS_ORIGIN` once the frontend domain exists (no wildcard with credentials). |
+| D8 | **AI endpoints return 503 "AI assistance is not configured"** (no `ANTHROPIC_API_KEY`). | UI shows the unavailable state. Needs a key on the VPS. |
+| D9 | `GET /contracts?dealId=` → 400 (filter not supported); no `briefId`/`applicationId` filters on deals/applications. | Same as entry 8: client-side matching over the first 100 records; breaks beyond 100. Needs scalable filter endpoints. |
+| D10 | `GET /brands/mine` (before D3 is deployed) answers a *non-owner* path as `404 Brand not found` because the request falls through to `GET /brands/:id`. | Disappears with D3. |
+
+Frontend-side hardening added in this pass (no UI changes): mandatory `API_URL`
+in production, upstream timeouts with 504/502 mapping, and a proxy test for both.
