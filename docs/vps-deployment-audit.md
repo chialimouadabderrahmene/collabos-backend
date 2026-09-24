@@ -174,6 +174,26 @@ credentials I don't have yet. Your call.
 - Not decided the storage provider (needs your call).
 - Not confirmed DNS (blocker above — needs your action).
 
+## Update — domain and storage decided
+
+- **Domain: `api.neao.online`** (confirmed by the VPS/domain owner). Note:
+  bare `neao.online` already resolves to this VPS (`169.58.30.9`) and is
+  already a site block in the shared Caddyfile (redirects to
+  `adraea.com`) — `api.neao.online` is a *different* hostname, Caddy
+  matches blocks by exact hostname, so this is a clean, independent
+  addition with zero interaction with that existing block. Checked
+  separately: `api.neao.online` itself does **not** resolve yet (NXDOMAIN)
+  — an A record (and optionally AAAA for `2a02:c207:2344:5686::1`) still
+  needs to be added at whatever DNS provider hosts `neao.online`, before a
+  real TLS cert can be issued for it.
+- **Storage: persistent local VPS storage** for this first deployment
+  (not S3/R2). `.env.production.example` and `docker-compose.production.yml`
+  updated accordingly — the `collabos_uploads` named volume is enabled,
+  `STORAGE_LOCAL_PUBLIC_BASE_URL` points at `https://api.neao.online/storage`.
+- `CLIENT_URL`, `CORS_ORIGIN`, `STRIPE_CONNECT_REFRESH_URL`, and
+  `STRIPE_CONNECT_RETURN_URL` all need the frontend's eventual domain, not
+  this API's — left blank in the template rather than guessed.
+
 ## Next steps, in order
 
 1. **You:** confirm the real domain and point its DNS at `169.58.30.9` (or

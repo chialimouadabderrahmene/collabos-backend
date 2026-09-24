@@ -106,11 +106,14 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
-    # Uncomment only if the local storage provider is used (STORAGE_PROVIDER=local)
-    # so uploads survive container replacement — never store them only in the
-    # ephemeral container filesystem. Not needed for STORAGE_PROVIDER=s3.
-    # volumes:
-    #   - collabos_uploads:/app/uploads
+    # Decision: STORAGE_PROVIDER=local for this first deployment
+    # (docs/vps-deployment-audit.md) — uploads must survive container
+    # replacement, never live only in the ephemeral container filesystem.
+    # One volume at /app/uploads covers every *_UPLOAD_DIR and
+    # STORAGE_LOCAL_DIR default (./uploads/avatars, .../storage, etc. —
+    # all relative to /app, the container's WORKDIR).
+    volumes:
+      - collabos_uploads:/app/uploads
 
 networks:
   # Deliberately NOT `internal: true`: the API container needs normal
@@ -126,5 +129,5 @@ volumes:
     name: collabos_postgres_data
   collabos_redis_data:
     name: collabos_redis_data
-  # collabos_uploads:
-  #   name: collabos_uploads
+  collabos_uploads:
+    name: collabos_uploads
