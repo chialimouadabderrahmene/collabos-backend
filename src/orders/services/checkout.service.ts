@@ -14,7 +14,10 @@ interface CartLineItem {
   sku: string;
   productName: string;
   brandId: string;
+  /** Whole-unit price in `currency`, from the product/variant — never assumed. */
   unitPrice: number;
+  /** ISO 4217 code from the product catalog (`Product.currency`). */
+  currency: string;
   quantity: number;
   availableStock: number;
 }
@@ -44,6 +47,10 @@ export class CheckoutService {
         productName: item.variant.product.name,
         brandId: item.variant.product.brandId,
         unitPrice,
+        // The product's own currency is the source of truth. Never fall
+        // back to USD or any other default — Prisma would otherwise apply
+        // the schema default silently when this is left unset.
+        currency: item.variant.product.currency,
         quantity: item.quantity,
         availableStock: item.variant.stockQuantity,
       };
@@ -64,6 +71,19 @@ export class CheckoutService {
       itemsByBrand.set(line.brandId, existing);
     }
 
+    // Each order is charged and paid out in a single currency. The current
+    // catalog model allows a brand's products to be priced in different
+    // currencies, so verify the cart doesn't require silently mixing them
+    // (or worse, converting) into one order.
+    for (const [brandId, lines] of itemsByBrand) {
+      const currencies = new Set(lines.map((line) => line.currency));
+      if (currencies.size > 1) {
+        throw new BadRequestException(
+          `Cannot check out items priced in different currencies (${[...currencies].join(', ')}) in the same order for brand ${brandId}`,
+        );
+      }
+    }
+
     const orders = await this.prisma.$transaction(async (tx) => {
       const createdOrders: (Order & { items: OrderItem[] })[] = [];
 
@@ -78,6 +98,9 @@ export class CheckoutService {
             buyerId: userId,
             brandId,
             subtotal,
+            // Safe: every line in `lines` was verified above to share one
+            // currency, so the first line's currency applies to the order.
+            currency: lines[0].currency,
             shippingAddress: dto.shippingAddress as Prisma.InputJsonValue,
             items: {
               create: lines.map((line) => ({

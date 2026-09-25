@@ -24,12 +24,13 @@ RUN npm ci --omit=dev \
 
 COPY --from=build /app/dist ./dist
 
-RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
+RUN addgroup -S nodejs && adduser -S nestjs -G nodejs \
+ && mkdir -p /app/uploads && chown nestjs:nodejs /app/uploads
 USER nestjs
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health/live',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+  CMD node -e "require('http').get('http://localhost:'+(process.env.PORT||3000)+'/health/live',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
 CMD ["node", "dist/main.js"]

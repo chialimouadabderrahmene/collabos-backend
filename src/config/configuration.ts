@@ -139,3 +139,18 @@ export const storageConfig = registerAs('storage', () => ({
   s3SecretAccessKey: process.env.STORAGE_S3_SECRET_ACCESS_KEY,
   s3PublicBaseUrl: process.env.STORAGE_S3_PUBLIC_BASE_URL || undefined,
 }));
+
+export const opportunitiesConfig = registerAs('opportunities', () => ({
+  assetMaxSizeMb: parseInt(
+    process.env.OPPORTUNITY_ASSET_MAX_SIZE_MB ?? '15',
+    10,
+  ),
+  assetUrlTtlSeconds: parseInt(
+    process.env.OPPORTUNITY_ASSET_URL_TTL_SECONDS ?? '900',
+    10,
+  ),
+  shareBaseUrl:
+    process.env.OPPORTUNITY_SHARE_BASE_URL ||
+    `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/share`,
+  aiMaxTokens: parseInt(process.env.OPPORTUNITY_AI_MAX_TOKENS ?? '2048', 10),
+}));

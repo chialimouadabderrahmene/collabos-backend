@@ -50,6 +50,18 @@ watermark-based incremental sync rather than write hooks, because
 `PrismaService` (injected at 300+ call sites) was judged too risky for a
 "no breaking changes" pass.
 
+## Opportunity Creation Studio
+
+The current product core. A brand team (`BrandMember`: OWNER / ADMIN /
+EDITOR / VIEWER) turns sketches, references and notes into an editorial
+Opportunity: a mutable **draft** (editor-agnostic structured JSON with
+optimistic concurrency), **assets** (content-sniffed uploads served through
+short-lived signed URLs), **AI suggestions** that are never applied
+automatically, **immutable published versions** (DB-trigger enforced,
+race-free numbering) and **private share links** pinned to one version.
+See [`docs/adr/0007-opportunity-creation-studio.md`](docs/adr/0007-opportunity-creation-studio.md).
+The earlier marketplace modules remain in place for later phases.
+
 ## Cross-module design principle
 
 Modules never import each other's services. If module B needs data owned
@@ -85,6 +97,7 @@ src/
   auth/ users/ brands/ briefs/ applications/ messaging/ deals/
   contracts/ drops/ products/ orders/ payments/ payouts/ analytics/
   notifications/ ai/ admin/          # feature modules, one per domain
+  opportunities/                     # Opportunity Creation Studio (MVP core)
   events/                            # domain events + transactional outbox
   search/                            # Typesense + incremental reindexing
   storage/                           # StorageProvider abstraction (local/S3)
@@ -113,6 +126,9 @@ npm run start:dev
 npm run lint
 npm run build
 npx vitest run              # full test suite, no database required
+
+# Integration tests against a disposable, migrated PostgreSQL (never a shared DB)
+INTEGRATION_DATABASE_URL=postgresql://... npm run test:integration
 ```
 
 Swagger docs are served at `/api/docs` when `SWAGGER_ENABLED=true`.

@@ -106,6 +106,26 @@ export const envSchema = z.object({
   STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
   STORAGE_S3_PUBLIC_BASE_URL: z.string().url().optional(),
 
+  OPPORTUNITY_ASSET_MAX_SIZE_MB: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(15),
+  OPPORTUNITY_ASSET_URL_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86400)
+    .default(900),
+  OPPORTUNITY_SHARE_BASE_URL: z.string().url().optional(),
+  OPPORTUNITY_AI_MAX_TOKENS: z.coerce
+    .number()
+    .int()
+    .min(256)
+    .max(8192)
+    .default(2048),
+
   OTEL_SERVICE_NAME: z.string().default('collabos-backend'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });

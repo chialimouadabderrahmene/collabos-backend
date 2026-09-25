@@ -87,6 +87,17 @@ model User {
   reportsReviewed         ContentReport[]    @relation("ReportsReviewed")
   platformSettingsUpdates PlatformSettings[]
 
+  // Opportunity Creation Studio
+  brandMemberships             BrandMember[]             @relation("BrandMemberUser")
+  opportunitiesCreated         Opportunity[]             @relation("OpportunityCreator")
+  opportunityMemberships       OpportunityMember[]       @relation("OpportunityMemberUser")
+  opportunityDraftEdits        OpportunityDraft[]        @relation("OpportunityDraftEditor")
+  opportunityVersionsPublished OpportunityVersion[]      @relation("OpportunityVersionPublisher")
+  opportunityAssetsUploaded    OpportunityAsset[]        @relation("OpportunityAssetUploader")
+  opportunityShareLinksCreated OpportunityShareLink[]    @relation("OpportunityShareLinkCreator")
+  opportunityAiSuggestions     OpportunityAiSuggestion[] @relation("OpportunityAiSuggestionRequester")
+  opportunityActivities        OpportunityActivity[]     @relation("OpportunityActivityActor")
+
   @@map("users")
 }
 
@@ -277,6 +288,9 @@ model Brand {
   products   Product[]
   orders     Order[]
   pageViews  PageView[]
+
+  members       BrandMember[]
+  opportunities Opportunity[]
 
   @@index([ownerId])
   @@map("brands")
@@ -1387,4 +1401,283 @@ model SearchSyncState {
   updatedAt    DateTime @updatedAt
 
   @@map("search_sync_state")
+}
+
+// ---------------------------------------------------------------------------
+// Brand membership (tenant access)
+// ---------------------------------------------------------------------------
+
+enum BrandMemberRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Membership of a user in a Brand (the tenant). `Brand.ownerId` remains the
+/// legal owner; every owner also has an OWNER row here (backfilled by the
+/// migration that introduced this table).
+model BrandMember {
+  id        String          @id @default(uuid())
+  brandId   String
+  brand     Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation("BrandMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role      BrandMemberRole
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([brandId, userId])
+  @@index([userId])
+  @@map("brand_members")
+}
+
+// ---------------------------------------------------------------------------
+// Opportunity Creation Studio
+// ---------------------------------------------------------------------------
+
+enum OpportunityStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OpportunityMemberRole {
+  EDITOR
+  VIEWER
+}
+
+enum OpportunityAssetKind {
+  IMAGE
+  SKETCH
+  REFERENCE
+}
+
+enum OpportunityAiSuggestionKind {
+  GENERATE_COPY
+  REWRITE
+  SUMMARIZE
+  STRUCTURE
+  TITLES
+}
+
+enum OpportunityAiSuggestionStatus {
+  PENDING
+  ACCEPTED
+  DISCARDED
+}
+
+enum OpportunityActivityType {
+  CREATED
+  UPDATED
+  ARCHIVED
+  ASSET_UPLOADED
+  ASSET_DELETED
+  PUBLISHED
+  SHARE_LINK_CREATED
+  SHARE_LINK_REVOKED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  AI_SUGGESTION_REQUESTED
+}
+
+/// An editorial Opportunity owned by a Brand. Never hard-deleted once it has
+/// published versions (archive instead): versions reference it with
+/// onDelete Restrict and are protected by an immutability trigger.
+model Opportunity {
+  id                  String            @id @default(uuid())
+  brandId             String
+  brand               Brand             @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  createdById         String
+  createdBy           User              @relation("OpportunityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  title               String
+  summary             String?
+  status              OpportunityStatus @default(DRAFT)
+  metadata            Json              @default("{}")
+  /// Monotonic publish counter. Incremented atomically (row lock) inside the
+  /// publish transaction; the new version number is the incremented value.
+  latestVersionNumber Int               @default(0)
+  lastPublishedAt     DateTime?
+  archivedAt          DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  draft         OpportunityDraft?
+  members       OpportunityMember[]
+  versions      OpportunityVersion[]
+  assets        OpportunityAsset[]
+  shareLinks    OpportunityShareLink[]
+  aiSuggestions OpportunityAiSuggestion[]
+  activities    OpportunityActivity[]
+
+  @@index([brandId, status])
+  @@index([createdById])
+  @@map("opportunities")
+}
+
+/// Per-opportunity collaborator grant, for users who are not (or not
+/// sufficiently) members of the owning Brand.
+model OpportunityMember {
+  id            String                @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity           @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User                  @relation("OpportunityMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role          OpportunityMemberRole
+  addedById     String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([opportunityId, userId])
+  @@index([userId])
+  @@map("opportunity_members")
+}
+
+/// The single mutable working copy of an Opportunity structured document.
+/// `content` is editor-agnostic JSON (Tiptap/ProseMirror/Lexical/Slate);
+/// `revision` provides optimistic concurrency for autosave.
+model OpportunityDraft {
+  id            String      @id @default(uuid())
+  opportunityId String      @unique
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  format        String
+  schemaVersion Int         @default(1)
+  content       Json
+  revision      Int         @default(0)
+  updatedById   String?
+  updatedBy     User?       @relation("OpportunityDraftEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("opportunity_drafts")
+}
+
+/// Immutable published snapshot. Rows are never updated or deleted: there is
+/// no service code path for it, and a database trigger rejects it.
+model OpportunityVersion {
+  id            String      @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  versionNumber Int
+  title         String
+  summary       String?
+  metadata      Json
+  format        String
+  schemaVersion Int
+  content       Json
+  /// sha256 of the canonical JSON of the snapshot, for integrity checks.
+  contentHash   String
+  /// Draft revision this snapshot was taken from.
+  draftRevision Int
+  notes         String?
+  publishedById String
+  publishedBy   User        @relation("OpportunityVersionPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+  publishedAt   DateTime    @default(now())
+
+  assets     OpportunityVersionAsset[]
+  shareLinks OpportunityShareLink[]
+
+  @@unique([opportunityId, versionNumber])
+  @@map("opportunity_versions")
+}
+
+/// Assets pinned to a published version (immutable, like the version).
+/// `altText` is snapshotted so later asset edits never alter the publication.
+model OpportunityVersionAsset {
+  versionId String
+  version   OpportunityVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  assetId   String
+  asset     OpportunityAsset   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  altText   String?
+
+  @@id([versionId, assetId])
+  @@index([assetId])
+  @@map("opportunity_version_assets")
+}
+
+model OpportunityAsset {
+  id               String               @id @default(uuid())
+  opportunityId    String
+  opportunity      Opportunity          @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  uploadedById     String
+  uploadedBy       User                 @relation("OpportunityAssetUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  kind             OpportunityAssetKind
+  /// Internal storage key, never returned by the API.
+  storageKey       String               @unique
+  mimeType         String
+  sizeBytes        Int
+  width            Int?
+  height           Int?
+  /// sha256 hex of the file bytes.
+  checksum         String
+  originalFilename String?
+  altText          String?
+  deletedAt        DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  versionAssets OpportunityVersionAsset[]
+
+  @@index([opportunityId, deletedAt])
+  @@map("opportunity_assets")
+}
+
+/// Private share link pinned to one immutable published version. Only the
+/// sha256 of the token is stored; the raw token is returned once at creation.
+model OpportunityShareLink {
+  id             String             @id @default(uuid())
+  opportunityId  String
+  opportunity    Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  versionId      String
+  version        OpportunityVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  tokenHash      String             @unique
+  tokenPrefix    String
+  label          String?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedById    String?
+  createdById    String
+  createdBy      User               @relation("OpportunityShareLinkCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  accessCount    Int                @default(0)
+  lastAccessedAt DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([opportunityId])
+  @@index([versionId])
+  @@map("opportunity_share_links")
+}
+
+/// AI output stored as a suggestion. Never applied to the draft by the
+/// backend: the client applies (and edits) it, then saves the draft itself.
+model OpportunityAiSuggestion {
+  id            String                        @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity                   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  requestedById String
+  requestedBy   User                          @relation("OpportunityAiSuggestionRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  kind          OpportunityAiSuggestionKind
+  status        OpportunityAiSuggestionStatus @default(PENDING)
+  input         Json
+  output        Json
+  model         String
+  resolvedById  String?
+  resolvedAt    DateTime?
+  createdAt     DateTime                      @default(now())
+
+  @@index([opportunityId, createdAt])
+  @@map("opportunity_ai_suggestions")
+}
+
+model OpportunityActivity {
+  id            String                  @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity             @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  actorId       String?
+  actor         User?                   @relation("OpportunityActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type          OpportunityActivityType
+  metadata      Json?
+  createdAt     DateTime                @default(now())
+
+  @@index([opportunityId, createdAt])
+  @@map("opportunity_activities")
 }

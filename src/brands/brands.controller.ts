@@ -30,6 +30,7 @@ import { ListFollowersQueryDto } from './dto/list-followers-query.dto';
 import { UpdateBrandProfileDto } from './dto/update-brand-profile.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 import { BrandAssetsService } from './services/brand-assets.service';
+import { BrandMembersService } from './services/brand-members.service';
 import { BrandProfileService } from './services/brand-profile.service';
 import { BrandsService } from './services/brands.service';
 import { FollowersService } from './services/followers.service';
@@ -43,6 +44,7 @@ import {
   PaginatedBrandsResponse,
   PaginatedFollowersResponse,
 } from './types/brand-response.types';
+import { MyBrandResponse } from './types/brand-member-response.types';
 
 @ApiTags('brands')
 @Controller('brands')
@@ -52,6 +54,7 @@ export class BrandsController {
     private readonly brandProfileService: BrandProfileService,
     private readonly brandAssetsService: BrandAssetsService,
     private readonly followersService: FollowersService,
+    private readonly brandMembersService: BrandMembersService,
   ) {}
 
   @Post()
@@ -73,6 +76,15 @@ export class BrandsController {
     @Query() query: ListBrandsQueryDto,
   ): Promise<PaginatedBrandsResponse> {
     return this.brandsService.findAll(query);
+  }
+
+  // Declared before ':id' so "mine" is not captured as a brand id.
+  @Get('mine')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Brands I belong to, with my role' })
+  @ApiResponse({ status: 200, type: [MyBrandResponse] })
+  findMine(@CurrentUser() user: AuthenticatedUser): Promise<MyBrandResponse[]> {
+    return this.brandMembersService.findMine(user);
   }
 
   @Public()

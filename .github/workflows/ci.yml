@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
 
 jobs:
   lint-build-test:
@@ -68,6 +68,11 @@ jobs:
 
       - name: Validate schema matches migrations
         run: npx prisma migrate status
+
+      - name: Integration tests (immutability trigger, concurrent publish, tenant isolation)
+        run: npm run test:integration
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://collabos:collabos@localhost:5432/collabos
 
   docker-build:
     name: Docker production build
