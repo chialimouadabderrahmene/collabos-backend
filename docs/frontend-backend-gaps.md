@@ -77,3 +77,5 @@ Found while connecting the frontend to the deployed backend. "Backend branch"
 
 Frontend-side hardening added in this pass (no UI changes): mandatory `API_URL`
 in production, upstream timeouts with 504/502 mapping, and a proxy test for both.
+
+**Update 2026‑09‑25:** D7 resolved — backend `CLIENT_URL`/`CORS_ORIGIN` now `https://app.neao.online`, so share-link `url` and WebSocket CORS use the real domain. D3/D4 deployed and verified. Open: D5 (SMTP), D6 (Stripe), D8 (AI), D9 (client-side matching >100).

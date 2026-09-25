@@ -103,3 +103,7 @@ See [`frontend-backend-gaps.md`](./frontend-backend-gaps.md) §"Deployment findi
 `app.neao.online` still resolves (Google, Cloudflare and both Namecheap authoritative servers) to **`169.58.30.9` — the VPS — not `76.76.21.21`**. Likely a wildcard/`app` record pointing at the VPS that overrides or precedes the new one. Fix at Namecheap: the `app` host must be a single `A` record → `76.76.21.21` (remove any other `app` A/CNAME). Backend `CLIENT_URL`/`CORS_ORIGIN`/Connect URLs stay unchanged until it resolves to Vercel.
 
 Vercel function logs (12 h): no runtime errors and no proxy failures; the only 5xx are pass-through backend responses for `auth/register` (no SMTP) and `payments/orders` (no Stripe key).
+
+### Domain live (2026‑09‑25)
+
+`https://app.neao.online` → Vercel (`A app 76.76.21.21`, certificate issued via `vercel certs issue`). Backend `CLIENT_URL`/`CORS_ORIGIN` = `https://app.neao.online`, Connect return/refresh = `https://app.neao.online/payouts`; API recreated (only `collabos-api`). CORS verified: an `Origin: https://evil.example` request is answered with `Access-Control-Allow-Origin: https://app.neao.online`, never reflected. Cookies `cos_at`/`cos_rt`: `Secure; HttpOnly; SameSite=Lax`; `cos_session`: `Secure`, not HttpOnly (presence flag only). Smoke suite (11 checks) passes on the domain. Some public resolvers (e.g. 1.1.1.1) may serve the old record until its TTL expires.
