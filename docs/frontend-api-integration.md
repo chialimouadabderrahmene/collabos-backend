@@ -97,3 +97,9 @@ See [`frontend-backend-gaps.md`](./frontend-backend-gaps.md) §"Deployment findi
 - **Domain:** `app.neao.online` is attached to the project. **DNS is not yet pointing at Vercel**: the zone is at Namecheap (`dns1/2.registrar-servers.com`); add `A  app  76.76.21.21` there. Until it resolves, use the public alias `https://collabos-frontend-mu.vercel.app` (the `*-chialimouads-projects.vercel.app` URLs sit behind Vercel SSO protection). Do **not** use `collabos-frontend.vercel.app` — it belongs to someone else.
 - **Backend CORS/`CLIENT_URL`:** unchanged (still placeholders). The app never calls the API cross-origin with credentials (same-origin proxy), so CORS is off the critical path; set `CLIENT_URL`/`CORS_ORIGIN=https://app.neao.online` and the Connect return/refresh URLs (`/payouts`) once DNS resolves.
 - **Smoke test:** `frontend/scripts/smoke.mjs` (login → brands → create → draft → publish → share → revoke → logout) — passes against production.
+
+### DNS status check (2026‑09‑25)
+
+`app.neao.online` still resolves (Google, Cloudflare and both Namecheap authoritative servers) to **`169.58.30.9` — the VPS — not `76.76.21.21`**. Likely a wildcard/`app` record pointing at the VPS that overrides or precedes the new one. Fix at Namecheap: the `app` host must be a single `A` record → `76.76.21.21` (remove any other `app` A/CNAME). Backend `CLIENT_URL`/`CORS_ORIGIN`/Connect URLs stay unchanged until it resolves to Vercel.
+
+Vercel function logs (12 h): no runtime errors and no proxy failures; the only 5xx are pass-through backend responses for `auth/register` (no SMTP) and `payments/orders` (no Stripe key).
