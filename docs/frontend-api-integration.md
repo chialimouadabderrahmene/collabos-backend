@@ -90,3 +90,10 @@ Browser ── same-origin ──▶ Next.js (BFF) ──server-side fetch──
 ## Known blockers (not frontend bugs)
 
 See [`frontend-backend-gaps.md`](./frontend-backend-gaps.md) §"Deployment findings" — pending backend redeploy, Stripe TEST keys, SMTP, frontend domain for `CLIENT_URL`/`CORS_ORIGIN`.
+
+## Production deployment (2026‑09‑25)
+
+- **Vercel project:** `collabos-frontend` (scope `chialimouads-projects`), Next.js, deployed from `frontend/` with `vercel deploy --prod` (build from commit `5356af5` + local smoke script). Production env: `API_URL=https://api.neao.online` only. `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is **not set** → the order page correctly says card payments aren't configured.
+- **Domain:** `app.neao.online` is attached to the project. **DNS is not yet pointing at Vercel**: the zone is at Namecheap (`dns1/2.registrar-servers.com`); add `A  app  76.76.21.21` there. Until it resolves, use the public alias `https://collabos-frontend-mu.vercel.app` (the `*-chialimouads-projects.vercel.app` URLs sit behind Vercel SSO protection). Do **not** use `collabos-frontend.vercel.app` — it belongs to someone else.
+- **Backend CORS/`CLIENT_URL`:** unchanged (still placeholders). The app never calls the API cross-origin with credentials (same-origin proxy), so CORS is off the critical path; set `CLIENT_URL`/`CORS_ORIGIN=https://app.neao.online` and the Connect return/refresh URLs (`/payouts`) once DNS resolves.
+- **Smoke test:** `frontend/scripts/smoke.mjs` (login → brands → create → draft → publish → share → revoke → logout) — passes against production.
