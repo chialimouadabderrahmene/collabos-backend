@@ -153,6 +153,43 @@ describe('OpportunityAiService', () => {
     expect(prisma.opportunity.update).not.toHaveBeenCalled();
   });
 
+  it('R1: STRUCTURE sees the founder intent already on file but never rewrites it', async () => {
+    access.authorize.mockResolvedValue({
+      opportunity: {
+        id: 'opp-1',
+        title: 'AW27 Knitwear',
+        summary: null,
+        metadata: {
+          specVersion: 1,
+          spec: {
+            intent: 'Original founder reasoning: explore a summer campaign',
+          },
+        },
+      },
+    });
+    anthropic.completeStructured.mockResolvedValue({
+      title: 'The Quiet Knit',
+      summary: 'An invitation to Italian knitwear ateliers.',
+      blocks: [{ type: 'paragraph', text: 'Soft structure.' }],
+    });
+
+    await service.structure('opp-1', user, {
+      notes: 'Bullet points from a call',
+    });
+
+    // The stored intent reached the model as context...
+    const call = anthropic.completeStructured.mock.calls[0][0] as {
+      prompt: string;
+    };
+    expect(call.prompt).toContain(
+      'Original founder reasoning: explore a summer campaign',
+    );
+    // ...but STRUCTURE only ever produces a suggestion; it never writes back
+    // to the opportunity, so the founder's original intent cannot be
+    // silently overwritten by an AI operation.
+    expect(prisma.opportunity.update).not.toHaveBeenCalled();
+  });
+
   it('requires edit rights', async () => {
     access.authorize.mockRejectedValue(new ForbiddenException());
 

@@ -160,6 +160,20 @@ describe('OpportunityDraftService', () => {
       expect(prisma.opportunityVersion.updateMany).not.toHaveBeenCalled();
     });
 
+    it('R1: draft/autosave never touches Opportunity.metadata — the spec is untouched by a content save', async () => {
+      await service.save('opp-1', user, saveDto());
+
+      // The R1 spec lives on Opportunity.metadata, not on the draft's
+      // content. A save does bump the opportunity's `updatedAt` (pre-existing,
+      // unrelated to R1), but must never include `metadata` — an in-progress
+      // spec can never be clobbered by autosave.
+      for (const call of prisma.opportunity.update.mock.calls as Array<
+        [{ data: Record<string, unknown> }]
+      >) {
+        expect(call[0].data).not.toHaveProperty('metadata');
+      }
+    });
+
     it('returns 409 with the current revision when the draft moved on', async () => {
       prisma.opportunityDraft.updateMany.mockResolvedValue({ count: 0 });
       prisma.opportunityDraft.findUnique.mockResolvedValue(

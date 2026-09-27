@@ -183,6 +183,48 @@ describe('OpportunitiesService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('R1: persists a founder-intent-only opportunity spec on create', async () => {
+      brandAccess.resolve.mockResolvedValue({
+        brandId: 'brand-1',
+        ownerId: 'user-1',
+        role: 'OWNER',
+      });
+
+      await service.create(user, {
+        brandId: 'brand-1',
+        title: 'AW27 Knitwear',
+        metadata: { spec: { intent: 'Explore a summer campaign' } },
+      });
+
+      expect(prisma.opportunity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: {
+              spec: { intent: 'Explore a summer campaign' },
+              specVersion: 1,
+            },
+          }) as unknown,
+        }) as unknown,
+      );
+    });
+
+    it('R1: rejects a structurally invalid spec on create', async () => {
+      brandAccess.resolve.mockResolvedValue({
+        brandId: 'brand-1',
+        ownerId: 'user-1',
+        role: 'OWNER',
+      });
+
+      await expect(
+        service.create(user, {
+          brandId: 'brand-1',
+          title: 'x',
+          metadata: { spec: { intent: 12345 } },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.opportunity.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('findAll', () => {
@@ -226,6 +268,43 @@ describe('OpportunitiesService', () => {
           metadata: { fields: ['title', 'summary'] },
         }) as unknown,
       });
+    });
+
+    it('R1: validates and normalizes a spec on update, merging it into metadata', async () => {
+      await service.update('opp-1', user, {
+        metadata: { season: 'AW27', spec: { objective: 'Produce a lookbook' } },
+      });
+
+      expect(prisma.opportunity.update).toHaveBeenCalledWith({
+        where: { id: 'opp-1' },
+        data: {
+          metadata: {
+            season: 'AW27',
+            spec: { objective: 'Produce a lookbook' },
+            specVersion: 1,
+          },
+        },
+      });
+    });
+
+    it('R1: rejects a structurally invalid spec on update', async () => {
+      await expect(
+        service.update('opp-1', user, {
+          metadata: { spec: { objective: '' } },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.opportunity.update).not.toHaveBeenCalled();
+    });
+
+    it('R1: an unauthorized user cannot modify the spec (rejected before it is ever validated or written)', async () => {
+      access.authorize.mockRejectedValueOnce(new ForbiddenException());
+
+      await expect(
+        service.update('opp-1', user, {
+          metadata: { spec: { intent: 'sneaky change' } },
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.opportunity.update).not.toHaveBeenCalled();
     });
   });
 

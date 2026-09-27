@@ -14,6 +14,10 @@ import {
   JsonTreeLimits,
   validateJsonTree,
 } from '../utils/document.util';
+import {
+  OPPORTUNITY_SPEC_VERSION,
+  validateOpportunitySpec,
+} from '../schemas/opportunity-spec.schema';
 
 export interface DocumentInput {
   format: string;
@@ -42,12 +46,78 @@ export class OpportunityDocumentService {
     };
   }
 
+  /**
+   * Generic JSON-tree safety (size/depth/prototype-pollution — same as any
+   * other metadata) plus, when the caller included a `spec` key, R1's
+   * structural validation of it (see opportunity-spec.schema.ts). Every
+   * other key in `metadata` (e.g. `collaborationType`, `season`,
+   * `presentation`) passes through untouched, exactly as before R1.
+   */
   validateMetadata(metadata: Record<string, unknown>): Prisma.InputJsonObject {
     const { assetIds } = this.validateTree(metadata, METADATA_LIMITS);
     if (assetIds.length > 0) {
       throw new BadRequestException('Metadata cannot reference assets');
     }
-    return metadata as Prisma.InputJsonObject;
+    return this.normalizeSpec(metadata);
+  }
+
+  /**
+   * Defensive re-check used at publish time (see
+   * OpportunityPublishService): the spec was already validated when it was
+   * written, so this should never fail in practice, but publish is the
+   * boundary where a structurally invalid spec would otherwise be
+   * snapshotted permanently into an immutable version.
+   */
+  assertPublishableMetadata(metadata: unknown): void {
+    if (!isPlainObject(metadata) || metadata.spec === undefined) {
+      return;
+    }
+    const result = validateOpportunitySpec(metadata.spec);
+    if (!result.ok) {
+      throw new UnprocessableEntityException({
+        message:
+          'Opportunity specification is invalid; fix it before publishing',
+        issues: result.issues,
+      });
+    }
+  }
+
+  /** `metadata.spec`, if present, is validated and its (trimmed, normalized)
+   * value written back under a server-set `specVersion` — the client is not
+   * required to send `specVersion` itself (it defaults to the current
+   * version), but if it does send one, it must match: an unrecognised
+   * version is rejected rather than silently coerced, so a future
+   * `specVersion: 2` migration can tell old and new shapes apart. No `spec`
+   * key means "no opinion": the metadata object is returned exactly as
+   * given, so opportunities created before R1 (or updates that never touch
+   * `spec`) are completely unaffected. */
+  private normalizeSpec(
+    metadata: Record<string, unknown>,
+  ): Prisma.InputJsonObject {
+    if (metadata.spec === undefined) {
+      return metadata as Prisma.InputJsonObject;
+    }
+    if (
+      metadata.specVersion !== undefined &&
+      metadata.specVersion !== OPPORTUNITY_SPEC_VERSION
+    ) {
+      throw new BadRequestException({
+        message: `Unsupported opportunity specification version: ${JSON.stringify(metadata.specVersion)}`,
+        issues: [`specVersion must be ${OPPORTUNITY_SPEC_VERSION}`],
+      });
+    }
+    const result = validateOpportunitySpec(metadata.spec);
+    if (!result.ok) {
+      throw new BadRequestException({
+        message: 'Invalid opportunity specification',
+        issues: result.issues,
+      });
+    }
+    return {
+      ...metadata,
+      spec: result.spec,
+      specVersion: OPPORTUNITY_SPEC_VERSION,
+    };
   }
 
   /** Asset IDs referenced by already-stored (hence already-validated)

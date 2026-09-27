@@ -128,7 +128,12 @@ export class OpportunityPublishService {
           document.assetIds,
         );
 
-        // 4. Snapshot + integrity hash.
+        // 4. Snapshot + integrity hash. The R1 spec (if any) was already
+        // validated when it was written (see
+        // OpportunityDocumentService.validateMetadata) — this is a defensive
+        // re-check so a structurally invalid spec is never permanently
+        // snapshotted into an immutable version.
+        this.documents.assertPublishableMetadata(opportunity.metadata);
         const metadata = opportunity.metadata as Prisma.InputJsonValue;
         const contentHash = sha256Hex(
           canonicalJson({

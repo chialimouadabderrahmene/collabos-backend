@@ -284,4 +284,62 @@ describe('OpportunityPublishService', () => {
       versionNumber: 1,
     });
   });
+
+  describe('R1 — opportunity spec in published versions', () => {
+    it('snapshots a valid spec into the published version metadata', async () => {
+      versionCounter = 0;
+      prisma.opportunity.update.mockImplementation(() => {
+        versionCounter += 1;
+        return Promise.resolve({
+          id: 'opp-1',
+          brandId: 'brand-1',
+          title: 'AW27 Knitwear',
+          summary: 'An artisan collaboration',
+          metadata: {
+            season: 'AW27',
+            specVersion: 1,
+            spec: { intent: 'Explore a summer campaign' },
+          },
+          latestVersionNumber: versionCounter,
+        });
+      });
+
+      const v1 = await service.publish('opp-1', user, {});
+
+      expect(v1.metadata).toEqual({
+        season: 'AW27',
+        specVersion: 1,
+        spec: { intent: 'Explore a summer campaign' },
+      });
+      expect(prisma.opportunityVersion.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: {
+              season: 'AW27',
+              specVersion: 1,
+              spec: { intent: 'Explore a summer campaign' },
+            },
+          }) as unknown,
+        }) as unknown,
+      );
+    });
+
+    it('rejects publishing when the stored spec is structurally invalid (defence in depth)', async () => {
+      prisma.opportunity.update.mockResolvedValueOnce({
+        id: 'opp-1',
+        brandId: 'brand-1',
+        title: 'AW27 Knitwear',
+        summary: 'An artisan collaboration',
+        // Not writable through the normal API (validateMetadata would have
+        // rejected it) — simulates already-corrupt stored data.
+        metadata: { spec: { intent: 12345 } },
+        latestVersionNumber: 1,
+      });
+
+      await expect(service.publish('opp-1', user, {})).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
+      expect(prisma.opportunityVersion.create).not.toHaveBeenCalled();
+    });
+  });
 });
