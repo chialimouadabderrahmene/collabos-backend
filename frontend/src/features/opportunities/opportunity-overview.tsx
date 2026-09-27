@@ -11,6 +11,7 @@ import { Card, Eyebrow, KeyValue, SectionHeader } from "@/components/ui/display"
 import { ErrorState, Skeleton, SkeletonList } from "@/components/ui/feedback";
 import { ConfirmationDialog } from "@/components/ui/overlays";
 import { toast } from "@/components/ui/toast";
+import { isEmptyOpportunitySpec, readOpportunitySpec } from "@/features/editor/document-model";
 import { ApiError } from "@/lib/api/http";
 import { opportunitiesApi } from "@/lib/api/opportunities";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -65,6 +66,7 @@ export function OpportunityOverview({ opportunityId }: { opportunityId: string }
   const archived = Boolean(data.archivedAt);
   const latest = versions.data?.[0];
   const activeLinks = links.data?.filter((link) => link.status === "ACTIVE").length ?? 0;
+  const spec = readOpportunitySpec(data.metadata);
   const base = `/opportunities/${data.id}`;
 
   const restore = async () => {
@@ -194,6 +196,24 @@ export function OpportunityOverview({ opportunityId }: { opportunityId: string }
               <KeyValue label="Created" value={formatDate(data.createdAt)} />
             </Card>
           </section>
+
+          {!isEmptyOpportunitySpec(spec) && (
+            <section aria-labelledby="specification">
+              <SectionHeader title={<span id="specification">Specification</span>} />
+              <Card className="px-4">
+                {spec.intent && <KeyValue label="Why this exists" value={spec.intent} />}
+                {spec.collaborator?.type && <KeyValue label="Looking for" value={spec.collaborator.type} />}
+                {spec.objective && <KeyValue label="Objective" value={spec.objective} />}
+                {spec.deliverables && spec.deliverables.length > 0 && (
+                  <KeyValue label="Deliverables" value={spec.deliverables.join(", ")} />
+                )}
+                {spec.timeline && <KeyValue label="Timing" value={spec.timeline} />}
+                {spec.budget && <KeyValue label="Budget" value={spec.budget} />}
+                {spec.constraints && <KeyValue label="Constraints" value={spec.constraints} />}
+                {spec.successCriteria && <KeyValue label="Success looks like" value={spec.successCriteria} />}
+              </Card>
+            </section>
+          )}
 
           <section aria-labelledby="collaborators">
             <SectionHeader title={<span id="collaborators">Collaborators</span>} />

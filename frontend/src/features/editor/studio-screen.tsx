@@ -37,7 +37,14 @@ import { useDraftAutosave } from "./autosave";
 import { insertBlockAfterCurrent, type BlockDefinition } from "./blocks";
 import { ConflictDialog } from "./conflict-dialog";
 import { ContentPanel } from "./content-panel";
-import { assetRef, emptyDocument, readPresentation, type Presentation } from "./document-model";
+import {
+  assetRef,
+  emptyDocument,
+  readOpportunitySpec,
+  readPresentation,
+  type OpportunitySpec,
+  type Presentation,
+} from "./document-model";
 import { EditorStatus } from "./editor-status";
 import { studioExtensions } from "./extensions";
 import { FloatingToolbar } from "./floating-toolbar";
@@ -145,6 +152,7 @@ function Studio({ opportunity, draft, assets }: StudioProps) {
   const canEdit = Boolean(capabilities?.edit) && !archived;
   const canPublish = Boolean(capabilities?.publish) && !archived;
   const presentation = readPresentation(opportunity.metadata);
+  const spec = readOpportunitySpec(opportunity.metadata);
 
   const initialContent = useMemo<JsonDocument>(
     () => (draft.format === "blank" ? (emptyDocument() as unknown as JsonDocument) : draft.content),
@@ -215,6 +223,13 @@ function Studio({ opportunity, draft, assets }: StudioProps) {
   const changePresentation = (next: Presentation) =>
     void saveMeta({ metadata: { ...opportunity.metadata, presentation: next } }).catch(() => undefined);
 
+  // R1 — same mechanism as `changePresentation` above: merges into the
+  // existing Opportunity.metadata via the plain PATCH update, not the
+  // document draft/autosave flow (the spec is Opportunity-level data, not
+  // document content — see docs/adr/0008-opportunity-spec.md).
+  const changeSpec = (next: OpportunitySpec) =>
+    void saveMeta({ metadata: { ...opportunity.metadata, spec: next } }).catch(() => undefined);
+
   const goTo = async (href: string) => {
     const saved = await autosave.flush();
     if (!saved) {
@@ -269,6 +284,8 @@ function Studio({ opportunity, draft, assets }: StudioProps) {
         canEdit={canEdit}
         presentation={presentation}
         onPresentationChange={changePresentation}
+        spec={spec}
+        onSpecChange={changeSpec}
       />
     ) : (
       <AiPanel opportunityId={opportunity.id} canEdit={canEdit} handlers={aiHandlers} />
@@ -297,6 +314,8 @@ function Studio({ opportunity, draft, assets }: StudioProps) {
             canEdit={canEdit}
             presentation={presentation}
             onPresentationChange={changePresentation}
+            spec={spec}
+            onSpecChange={changeSpec}
           />
         );
       case "ai":

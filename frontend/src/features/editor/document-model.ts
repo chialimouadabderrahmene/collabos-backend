@@ -152,3 +152,73 @@ export function readPresentation(metadata: unknown): Presentation {
     style: pick("style", ["noir", "lime", "mono"], DEFAULT_PRESENTATION.style),
   };
 }
+
+/**
+ * R1 — structured Opportunity specification (INSTINCT + SPECIFICITY),
+ * stored in `Opportunity.metadata.spec` alongside `presentation` above. The
+ * backend (`OpportunityDocumentService`) is the source of truth for
+ * validation — this reader is deliberately lenient (never throws), the same
+ * way `readPresentation` is: a malformed or absent value just reads back as
+ * "nothing set" so an opportunity created before R1, or with unrelated
+ * metadata only, still renders normally. See docs/adr/0008-opportunity-spec.md.
+ */
+export interface OpportunitySpec {
+  intent?: string;
+  collaborator?: { type?: string; notes?: string };
+  objective?: string;
+  deliverables?: string[];
+  timeline?: string;
+  budget?: string;
+  constraints?: string;
+  successCriteria?: string;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+export function readOpportunitySpec(metadata: unknown): OpportunitySpec {
+  const raw =
+    metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).spec : undefined;
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+  const value = raw as Record<string, unknown>;
+  const collaboratorRaw = value.collaborator;
+  const collaborator =
+    collaboratorRaw && typeof collaboratorRaw === "object"
+      ? {
+          type: readString((collaboratorRaw as Record<string, unknown>).type),
+          notes: readString((collaboratorRaw as Record<string, unknown>).notes),
+        }
+      : undefined;
+
+  return {
+    intent: readString(value.intent),
+    collaborator:
+      collaborator && (collaborator.type || collaborator.notes) ? collaborator : undefined,
+    objective: readString(value.objective),
+    deliverables: Array.isArray(value.deliverables)
+      ? value.deliverables.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : undefined,
+    timeline: readString(value.timeline),
+    budget: readString(value.budget),
+    constraints: readString(value.constraints),
+    successCriteria: readString(value.successCriteria),
+  };
+}
+
+/** True when nothing has been filled in yet — used to decide whether to show
+ * an empty-state hint instead of a wall of blank fields. */
+export function isEmptyOpportunitySpec(spec: OpportunitySpec): boolean {
+  return (
+    !spec.intent &&
+    !spec.collaborator &&
+    !spec.objective &&
+    !spec.deliverables?.length &&
+    !spec.timeline &&
+    !spec.budget &&
+    !spec.constraints &&
+    !spec.successCriteria
+  );
+}

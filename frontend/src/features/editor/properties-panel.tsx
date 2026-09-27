@@ -15,6 +15,7 @@ import {
   assetIdFromRef,
   assetRef,
   isSafeHref,
+  type OpportunitySpec,
   type Presentation,
 } from "./document-model";
 
@@ -342,6 +343,128 @@ function BlockProperties({
   );
 }
 
+/* --------------------------------------------------- specification */
+
+/** Joins/splits a short list as one line per item — the simplest possible
+ * editor for "what needs to be produced", matching the plain-text spirit of
+ * the rest of the R1 fields (see docs/adr/0008-opportunity-spec.md). */
+function deliverablesToText(items: string[] | undefined): string {
+  return (items ?? []).join("\n");
+}
+function textToDeliverables(text: string): string[] | undefined {
+  const items = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * R1 — the founder's instinct and the deal's specificity, captured
+ * alongside the editorial document rather than instead of it. Every field
+ * is optional and saves independently (one field, one commit) through the
+ * same opportunity-update path `Publication` below already uses — nothing
+ * here touches the document draft/autosave flow.
+ */
+export function SpecificationSection({
+  spec,
+  onChange,
+  canEdit,
+}: {
+  spec: OpportunitySpec;
+  onChange: (next: OpportunitySpec) => void;
+  canEdit: boolean;
+}) {
+  const set = <K extends keyof OpportunitySpec>(key: K, value: OpportunitySpec[K]) =>
+    onChange({ ...spec, [key]: value });
+
+  return (
+    <Section title="Specification">
+      <CommitInput
+        label="Why this exists"
+        multiline
+        value={spec.intent ?? ""}
+        placeholder="The instinct behind this opportunity — what triggered it, what you're exploring"
+        disabled={!canEdit}
+        onCommit={(value) => set("intent", value || undefined)}
+      />
+      <CommitInput
+        label="Who you're looking for"
+        value={spec.collaborator?.type ?? ""}
+        placeholder="e.g. photographer, ceramicist, production partner"
+        disabled={!canEdit}
+        onCommit={(value) =>
+          set(
+            "collaborator",
+            value || spec.collaborator?.notes
+              ? { ...spec.collaborator, type: value || undefined }
+              : undefined,
+          )
+        }
+      />
+      <CommitInput
+        label="What makes them the right fit"
+        multiline
+        value={spec.collaborator?.notes ?? ""}
+        disabled={!canEdit}
+        onCommit={(value) =>
+          set(
+            "collaborator",
+            value || spec.collaborator?.type
+              ? { ...spec.collaborator, notes: value || undefined }
+              : undefined,
+          )
+        }
+      />
+      <CommitInput
+        label="What you're trying to achieve"
+        multiline
+        value={spec.objective ?? ""}
+        disabled={!canEdit}
+        onCommit={(value) => set("objective", value || undefined)}
+      />
+      <CommitInput
+        label="What needs to be produced"
+        multiline
+        value={deliverablesToText(spec.deliverables)}
+        placeholder={"One per line, e.g.\n10 edited photos\n3 short reels"}
+        disabled={!canEdit}
+        onCommit={(value) => set("deliverables", textToDeliverables(value))}
+      />
+      <CommitInput
+        label="Timing"
+        value={spec.timeline ?? ""}
+        placeholder="Deadline, duration, key dates — whatever's actually known"
+        disabled={!canEdit}
+        onCommit={(value) => set("timeline", value || undefined)}
+      />
+      <CommitInput
+        label="Budget"
+        value={spec.budget ?? ""}
+        placeholder="A range, a cap, or a note that it's still open"
+        disabled={!canEdit}
+        onCommit={(value) => set("budget", value || undefined)}
+      />
+      <CommitInput
+        label="Constraints"
+        multiline
+        value={spec.constraints ?? ""}
+        placeholder="Known limitations, requirements or boundaries"
+        disabled={!canEdit}
+        onCommit={(value) => set("constraints", value || undefined)}
+      />
+      <CommitInput
+        label="How you'll know it worked"
+        multiline
+        value={spec.successCriteria ?? ""}
+        disabled={!canEdit}
+        onCommit={(value) => set("successCriteria", value || undefined)}
+      />
+    </Section>
+  );
+}
+
 /* ---------------------------------------------------- presentation */
 
 function PresentationSettings({
@@ -408,16 +531,21 @@ export function PropertiesPanel({
   canEdit,
   presentation,
   onPresentationChange,
+  spec,
+  onSpecChange,
 }: {
   editor: Editor;
   opportunityId: string;
   canEdit: boolean;
   presentation: Presentation;
   onPresentationChange: (next: Presentation) => void;
+  spec: OpportunitySpec;
+  onSpecChange: (next: OpportunitySpec) => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <BlockProperties editor={editor} opportunityId={opportunityId} canEdit={canEdit} />
+      <SpecificationSection spec={spec} onChange={onSpecChange} canEdit={canEdit} />
       <PresentationSettings value={presentation} onChange={onPresentationChange} canEdit={canEdit} />
     </div>
   );

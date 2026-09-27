@@ -176,6 +176,51 @@ describe("1. user creates an Opportunity", () => {
     expect(await screen.findByText("Give your Opportunity a title")).toBeInTheDocument();
     expect(opportunitiesApi.create).not.toHaveBeenCalled();
   });
+
+  it("R1: persists founder notes into metadata.spec.intent, alongside the existing AI structure call", async () => {
+    const { NewOpportunityForm } = await import("@/features/opportunities/new-opportunity-form");
+    vi.mocked(opportunitiesApi.create).mockResolvedValue(opportunity({ id: "opp-new" }));
+    vi.mocked(aiApi.structure).mockResolvedValue({
+      id: "suggestion-1",
+      kind: "STRUCTURE",
+      status: "PENDING",
+      model: "claude-test",
+      requestedById: "u1",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      resolvedAt: null,
+      output: {},
+    } as never);
+    const user = userEvent.setup();
+    renderWithClient(<NewOpportunityForm />);
+
+    await user.type(await screen.findByLabelText("Title"), "AW27 Capsule");
+    await user.type(screen.getByLabelText(/Founder notes/i), "Knitwear capsule, Italian atelier");
+    await user.click(screen.getByRole("button", { name: /continue to studio/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/opportunities/opp-new/studio"));
+    expect(opportunitiesApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { spec: { intent: "Knitwear capsule, Italian atelier" } },
+      }),
+    );
+    // Unchanged existing behaviour: the same notes are also sent to AI as a
+    // one-shot suggestion request — R1 adds persistence, not a new AI call.
+    expect(aiApi.structure).toHaveBeenCalledWith("opp-new", { notes: "Knitwear capsule, Italian atelier" });
+  });
+
+  it("R1: creating without founder notes stores no spec at all", async () => {
+    const { NewOpportunityForm } = await import("@/features/opportunities/new-opportunity-form");
+    vi.mocked(opportunitiesApi.create).mockResolvedValue(opportunity({ id: "opp-new" }));
+    const user = userEvent.setup();
+    renderWithClient(<NewOpportunityForm />);
+
+    await user.type(await screen.findByLabelText("Title"), "AW27 Capsule");
+    await user.click(screen.getByRole("button", { name: /continue to studio/i }));
+
+    await waitFor(() => expect(opportunitiesApi.create).toHaveBeenCalled());
+    const call = vi.mocked(opportunitiesApi.create).mock.calls[0]?.[0];
+    expect(call?.metadata).toEqual({});
+  });
 });
 
 describe("4. asset upload", () => {

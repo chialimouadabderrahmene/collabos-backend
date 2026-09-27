@@ -42,12 +42,18 @@ export function NewOpportunityForm() {
   }, [brand?.id, editableBrands, form]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const metadata: Record<string, string> = {};
+    const metadata: Record<string, unknown> = {};
     if (values.collaborationType) {
       metadata.collaborationType = values.collaborationType;
     }
     if (values.season) {
       metadata.season = values.season;
+    }
+    if (values.notes) {
+      // R1: the founder's original reasoning is worth keeping even though it
+      // is also sent to AI "structure" below — that call is one-shot and
+      // never persisted on its own. AI never rewrites this value.
+      metadata.spec = { intent: values.notes };
     }
 
     let opportunityId: string;
