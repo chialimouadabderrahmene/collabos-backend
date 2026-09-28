@@ -352,6 +352,45 @@ describe("6. publishing creates a version", () => {
     expect(await screen.findByRole("button", { name: /publish version 1/i })).toBeDisabled();
   });
 
+  it("R2: shows content readiness and specification confidence side by side, without blocking on confidence", async () => {
+    const { PublishScreen } = await import("@/features/opportunities/publish-screen");
+    vi.mocked(opportunitiesApi.get).mockResolvedValue(opportunity({ metadata: {} }));
+    vi.mocked(opportunitiesApi.getDraft).mockResolvedValue(draft({ revision: 6 }));
+    renderWithClient(<PublishScreen opportunityId="opp-1" />);
+
+    expect(await screen.findByText("Content readiness")).toBeInTheDocument();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText("Specification confidence")).toBeInTheDocument();
+    expect(screen.getByText("Needs a few details:")).toBeInTheDocument();
+    // R2 is contextual only — an incomplete spec never disables publishing.
+    expect(screen.getByRole("button", { name: /publish version 1/i })).toBeEnabled();
+  });
+
+  it("R2: shows a complete specification confidence note when every spec field is filled", async () => {
+    const { PublishScreen } = await import("@/features/opportunities/publish-screen");
+    vi.mocked(opportunitiesApi.get).mockResolvedValue(
+      opportunity({
+        metadata: {
+          spec: {
+            intent: "Summer campaign",
+            collaborator: { type: "Photographer" },
+            objective: "Lookbook",
+            deliverables: ["10 photos"],
+            timeline: "July",
+            budget: "€5,000",
+            constraints: "Milan only",
+            successCriteria: "500 signups",
+          },
+        },
+      }),
+    );
+    vi.mocked(opportunitiesApi.getDraft).mockResolvedValue(draft({ revision: 6 }));
+    renderWithClient(<PublishScreen opportunityId="opp-1" />);
+
+    expect(await screen.findByText("Specification confidence")).toBeInTheDocument();
+    expect(screen.getByText("Ready for confidence.")).toBeInTheDocument();
+  });
+
   it("explains a revision conflict at publish time", async () => {
     const { PublishScreen } = await import("@/features/opportunities/publish-screen");
     vi.mocked(opportunitiesApi.get).mockResolvedValue(opportunity());

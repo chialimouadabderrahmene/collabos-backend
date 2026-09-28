@@ -161,6 +161,25 @@ describe("DecisionSection (R3)", () => {
     expect(screen.getByRole("button", { name: "GO" })).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("shows a distinct error state when the decision history request fails — never the same as zero decisions", async () => {
+    vi.mocked(opportunitiesApi.decisions.list).mockRejectedValue(new Error("Not Found"));
+    renderWithClient(
+      <DecisionSection opportunityId="opp-1" brandId="brand-1" metadata={{}} latestVersion={version} canDecide />,
+    );
+
+    expect(await screen.findByText("Couldn't load decision history")).toBeInTheDocument();
+    expect(screen.queryByText("No decisions recorded yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty state only for a successful response with zero decisions", async () => {
+    vi.mocked(opportunitiesApi.decisions.list).mockResolvedValue([]);
+    renderWithClient(
+      <DecisionSection opportunityId="opp-1" brandId="brand-1" metadata={{}} latestVersion={version} canDecide />,
+    );
+
+    expect(await screen.findByText("No decisions recorded yet.")).toBeInTheDocument();
+  });
+
   it("renders nothing at all when the user cannot decide", () => {
     const { container } = renderWithClient(
       <DecisionSection

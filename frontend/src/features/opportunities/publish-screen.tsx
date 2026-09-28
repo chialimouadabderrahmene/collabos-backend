@@ -20,6 +20,8 @@ import { Card, Eyebrow } from "@/components/ui/display";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Field, Textarea } from "@/components/ui/field";
 import { useAssets } from "@/features/assets/hooks";
+import { readOpportunitySpec } from "@/features/editor/document-model";
+import { ConfidenceNote } from "@/features/editor/properties-panel";
 import { ApiError } from "@/lib/api/http";
 import { opportunitiesApi, type Version } from "@/lib/api/opportunities";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -133,6 +135,7 @@ export function PublishScreen({ opportunityId }: { opportunityId: string }) {
   const allowed = Boolean(data.capabilities?.publish) && !data.archivedAt;
   const checks = evaluateReadiness(data, draft.data, assets.data ?? []);
   const ready = canPublishWith(checks);
+  const spec = readOpportunitySpec(data.metadata);
   const nextVersion = data.latestVersionNumber + 1;
 
   return (
@@ -163,6 +166,21 @@ export function PublishScreen({ opportunityId }: { opportunityId: string }) {
           </p>
         </Card>
       )}
+
+      <Card className="mb-6 flex flex-col gap-4 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-body font-semibold text-fg">Content readiness</p>
+          <span className={cn("text-caption font-semibold", ready ? "text-accent" : "text-danger")}>
+            {ready ? "Ready" : "Needs attention"}
+          </span>
+        </div>
+        <div>
+          <p className="text-body font-semibold text-fg">Specification confidence</p>
+          <div className="mt-1">
+            <ConfidenceNote spec={spec} />
+          </div>
+        </div>
+      </Card>
 
       <ul className="mb-8 flex flex-col gap-2" aria-label="Readiness checks">
         {checks.map((check) => (

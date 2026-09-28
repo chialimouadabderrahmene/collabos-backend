@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, Eyebrow, SectionHeader } from "@/components/ui/display";
 import { Field, Textarea } from "@/components/ui/field";
-import { LoadingState } from "@/components/ui/feedback";
+import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { ConfirmationDialog } from "@/components/ui/overlays";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/features/auth/hooks";
@@ -195,7 +195,9 @@ export function DecisionSection({
       )}
 
       <div className="mt-5">
-        {decisions.isLoading ? (
+        {decisions.isError ? (
+          <ErrorState title="Couldn't load decision history" onRetry={() => void decisions.refetch()} />
+        ) : decisions.isLoading ? (
           <LoadingState label="Loading decision history" />
         ) : decisions.data && decisions.data.length > 0 ? (
           <div className="flex flex-col gap-3">

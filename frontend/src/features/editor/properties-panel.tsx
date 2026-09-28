@@ -379,7 +379,7 @@ const SPEC_FIELD_LABELS: Record<SpecFieldKey, string> = {
 /** R2 — explains what's missing, never judges the opportunity. No score, no
  * progress bar: just a plain sentence and, when incomplete, the specific
  * fields — the same language the fields above already use. */
-function ConfidenceNote({ spec }: { spec: OpportunitySpec }) {
+export function ConfidenceNote({ spec }: { spec: OpportunitySpec }) {
   const { complete, missing } = evaluateSpecConfidence(spec);
 
   if (complete) {
