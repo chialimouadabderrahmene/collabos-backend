@@ -112,5 +112,6 @@ export const queryKeys = {
     activity: (id: string) => ["opportunities", id, "activity"] as const,
     members: (id: string) => ["opportunities", id, "members"] as const,
     suggestions: (id: string) => ["opportunities", id, "ai-suggestions"] as const,
+    gaps: (id: string) => ["opportunities", id, "ai-gaps"] as const,
   },
 } as const;

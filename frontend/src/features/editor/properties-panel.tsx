@@ -3,13 +3,16 @@
 import { NodeSelection } from "@tiptap/pm/state";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
-import { ArrowDown, ArrowUp, ImagePlus, X } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, HelpCircle, ImagePlus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/display";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { AssetPicker } from "@/features/assets/asset-picker";
 import { evaluateSpecConfidence, type SpecFieldKey } from "@/features/opportunities/readiness";
+import { aiApi } from "@/lib/api/ai";
+import { ApiError } from "@/lib/api/http";
 import { cn } from "@/lib/utils/cn";
 import { useAssetMap } from "./asset-context";
 import {
@@ -77,6 +80,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** Text input that commits on blur/Enter (one attribute update, one save). */
 function CommitInput({
   label,
+  hint,
   value,
   onCommit,
   placeholder,
@@ -85,6 +89,7 @@ function CommitInput({
   disabled,
 }: {
   label: string;
+  hint?: string;
   value: string;
   onCommit: (value: string) => void;
   placeholder?: string;
@@ -110,7 +115,7 @@ function CommitInput({
   };
 
   return (
-    <Field label={label} error={error ?? undefined}>
+    <Field label={label} hint={hint} error={error ?? undefined}>
       {({ id, describedBy, invalid }) =>
         multiline ? (
           <Textarea
@@ -398,6 +403,62 @@ export function ConfidenceNote({ spec }: { spec: OpportunitySpec }) {
   );
 }
 
+function describeGapsError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.isUnavailable) return "AI assistance isn't configured.";
+    if (error.isRateLimited) return "Too many AI requests — try again in a minute.";
+  }
+  return "Couldn't load clarifying questions.";
+}
+
+/**
+ * R5 — CONFIDENCE ("what is missing?") → "what should I clarify, and why?".
+ * User-triggered, never automatic: R2 above already answers WHAT is missing
+ * for free; asking the model why costs a real AI call, so this only runs on
+ * an explicit click. Purely informational — no score, no automatic fill,
+ * nothing written back to the spec, draft or a decision.
+ */
+function GapsNote({ opportunityId }: { opportunityId: string }) {
+  const request = useMutation({ mutationFn: () => aiApi.gaps(opportunityId) });
+
+  return (
+    <div className="mt-3 border-t border-border pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-caption font-semibold text-muted">
+          <HelpCircle className="size-3.5" aria-hidden /> Questions to clarify
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          loading={request.isPending}
+          onClick={() => request.mutate()}
+        >
+          {request.isIdle ? "Check" : "Refresh"}
+        </Button>
+      </div>
+
+      {request.isError && (
+        <p className="mt-2 text-caption text-danger">{describeGapsError(request.error)}</p>
+      )}
+
+      {request.isSuccess &&
+        (request.data.gaps.length === 0 ? (
+          <p className="mt-2 text-caption text-faint">No open questions.</p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-2">
+            {request.data.gaps.map((gap) => (
+              <li key={gap.key} className="text-caption text-fg-2">
+                <p className="font-semibold">{gap.question}</p>
+                <p className="text-faint">{gap.reason}</p>
+              </li>
+            ))}
+          </ul>
+        ))}
+    </div>
+  );
+}
+
 /**
  * R1 — the founder's instinct and the deal's specificity, captured
  * alongside the editorial document rather than instead of it. Every field
@@ -406,10 +467,12 @@ export function ConfidenceNote({ spec }: { spec: OpportunitySpec }) {
  * here touches the document draft/autosave flow.
  */
 export function SpecificationSection({
+  opportunityId,
   spec,
   onChange,
   canEdit,
 }: {
+  opportunityId: string;
   spec: OpportunitySpec;
   onChange: (next: OpportunitySpec) => void;
   canEdit: boolean;
@@ -420,8 +483,10 @@ export function SpecificationSection({
   return (
     <Section title="Specification">
       <ConfidenceNote spec={spec} />
+      {canEdit && <GapsNote opportunityId={opportunityId} />}
       <CommitInput
         label="Why this exists"
+        hint="Your original idea — everything below expands it into a full brief."
         multiline
         value={spec.intent ?? ""}
         placeholder="The instinct behind this opportunity — what triggered it, what you're exploring"
@@ -465,6 +530,7 @@ export function SpecificationSection({
       />
       <CommitInput
         label="What needs to be produced"
+        hint="What the content you build on the left should ultimately include."
         multiline
         value={deliverablesToText(spec.deliverables)}
         placeholder={"One per line, e.g.\n10 edited photos\n3 short reels"}
@@ -584,7 +650,12 @@ export function PropertiesPanel({
   return (
     <div className="flex flex-col gap-5">
       <BlockProperties editor={editor} opportunityId={opportunityId} canEdit={canEdit} />
-      <SpecificationSection spec={spec} onChange={onSpecChange} canEdit={canEdit} />
+      <SpecificationSection
+        opportunityId={opportunityId}
+        spec={spec}
+        onChange={onSpecChange}
+        canEdit={canEdit}
+      />
       <PresentationSettings value={presentation} onChange={onPresentationChange} canEdit={canEdit} />
     </div>
   );

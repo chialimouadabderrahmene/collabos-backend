@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge, Card, Eyebrow, SectionHeader } from "@/components/ui/display";
@@ -50,12 +51,27 @@ const STATUS_TONE: Record<DecisionStatus, "success" | "warning" | "danger"> = {
   NO_GO: "danger",
 };
 
-function DecisionHistoryRow({ decision, nameOf }: { decision: Decision; nameOf: (id: string) => string }) {
+function DecisionHistoryRow({
+  opportunityId,
+  decision,
+  nameOf,
+}: {
+  opportunityId: string;
+  decision: Decision;
+  nameOf: (id: string) => string;
+}) {
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between gap-3">
         <Badge tone={STATUS_TONE[decision.status]}>{STATUS_LABEL[decision.status]}</Badge>
-        <span className="text-caption text-faint">Version {decision.versionNumber}</span>
+        {/* DECISION → VERSION: the version a decision was made against is
+         * always the exact snapshot it names, one click away. */}
+        <Link
+          href={`/opportunities/${opportunityId}/versions/${decision.versionNumber}`}
+          className="text-caption text-faint underline decoration-dotted underline-offset-2 hover:text-fg"
+        >
+          Version {decision.versionNumber}
+        </Link>
       </div>
       <p className="mt-2 text-body text-fg-2">{decision.rationale}</p>
       <p className="mt-2 text-caption text-faint">
@@ -145,7 +161,12 @@ export function DecisionSection({
       ) : (
         <Card className="p-5">
           <Eyebrow tone="accent">Deciding on</Eyebrow>
-          <p className="mt-1 font-display text-heading text-fg">Version {latestVersion.versionNumber}</p>
+          <Link
+            href={`/opportunities/${opportunityId}/versions/${latestVersion.versionNumber}`}
+            className="mt-1 block w-fit font-display text-heading text-fg hover:text-accent"
+          >
+            Version {latestVersion.versionNumber}
+          </Link>
           <p className="text-caption text-muted">Published {formatDate(latestVersion.publishedAt, true)}</p>
 
           {confidence && (
@@ -202,7 +223,12 @@ export function DecisionSection({
         ) : decisions.data && decisions.data.length > 0 ? (
           <div className="flex flex-col gap-3">
             {decisions.data.map((decision) => (
-              <DecisionHistoryRow key={decision.id} decision={decision} nameOf={nameOf} />
+              <DecisionHistoryRow
+                key={decision.id}
+                opportunityId={opportunityId}
+                decision={decision}
+                nameOf={nameOf}
+              />
             ))}
           </div>
         ) : (

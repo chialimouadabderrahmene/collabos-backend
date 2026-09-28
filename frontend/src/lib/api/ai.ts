@@ -48,6 +48,14 @@ export type AiSuggestion =
   | (SuggestionBase & { kind: "STRUCTURE"; output: StructureOutput })
   | (SuggestionBase & { kind: "TITLES"; output: TitlesOutput });
 
+/** R5 — a clarifying question about one field R2 already considers missing.
+ * Never stored, never accept/discard-able like a suggestion. */
+export interface OpportunityGap {
+  key: string;
+  question: string;
+  reason: string;
+}
+
 const base = (id: string) => `opportunities/${id}/ai`;
 
 export const aiApi = {
@@ -59,6 +67,7 @@ export const aiApi = {
   structure: (id: string, input: { notes: string }) =>
     http.post<AiSuggestion>(`${base(id)}/structure`, input),
   titles: (id: string) => http.post<AiSuggestion>(`${base(id)}/titles`),
+  gaps: (id: string) => http.get<{ gaps: OpportunityGap[] }>(`${base(id)}/gaps`),
   list: (id: string, status?: AiSuggestionStatus) =>
     http.get<Paginated<AiSuggestion>>(`${base(id)}/suggestions`, { status, limit: 20 }),
   accept: (id: string, suggestionId: string) =>

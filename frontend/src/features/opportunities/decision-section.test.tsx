@@ -193,4 +193,39 @@ describe("DecisionSection (R3)", () => {
     expect(container).toBeEmptyDOMElement();
     expect(opportunitiesApi.decisions.list).not.toHaveBeenCalled();
   });
+
+  describe("Journey continuity: DECISION → VERSION", () => {
+    it("the version being decided on links to that exact version's detail page", async () => {
+      renderWithClient(
+        <DecisionSection
+          opportunityId="opp-1"
+          brandId="brand-1"
+          metadata={{}}
+          latestVersion={version}
+          canDecide
+        />,
+      );
+
+      const link = await screen.findByRole("link", { name: "Version 3" });
+      expect(link).toHaveAttribute("href", "/opportunities/opp-1/versions/3");
+    });
+
+    it("each decision in history links to the exact version it was decided against", async () => {
+      vi.mocked(opportunitiesApi.decisions.list).mockResolvedValue([
+        decision({ id: "decision-2", versionNumber: 2, status: "HOLD" }),
+      ]);
+      renderWithClient(
+        <DecisionSection
+          opportunityId="opp-1"
+          brandId="brand-1"
+          metadata={{}}
+          latestVersion={version}
+          canDecide
+        />,
+      );
+
+      const link = await screen.findByRole("link", { name: "Version 2" });
+      expect(link).toHaveAttribute("href", "/opportunities/opp-1/versions/2");
+    });
+  });
 });

@@ -52,6 +52,7 @@ vi.mock("@/lib/api/ai", () => ({
     summarize: vi.fn(),
     structure: vi.fn(),
     titles: vi.fn(),
+    gaps: vi.fn(),
     list: vi.fn(),
     accept: vi.fn(),
     discard: vi.fn(),
