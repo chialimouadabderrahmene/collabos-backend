@@ -31,6 +31,7 @@ export class BrandsService {
         ownerId,
         name: dto.name,
         slug,
+        members: { create: { userId: ownerId, role: 'OWNER' } },
         categories: dto.categoryIds
           ? { connect: dto.categoryIds.map((id) => ({ id })) }
           : undefined,

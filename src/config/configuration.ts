@@ -94,8 +94,13 @@ export const pushConfig = registerAs('push', () => ({
 }));
 
 export const aiConfig = registerAs('ai', () => ({
+  provider: process.env.AI_PROVIDER ?? 'anthropic',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
   model: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5-20251001',
+  codecraftApiKey: process.env.CODECRAFT_API_KEY || undefined,
+  codecraftModel: process.env.CODECRAFT_MODEL ?? 'deepseek-v4-flash-0731',
+  codecraftBaseUrl:
+    process.env.CODECRAFT_BASE_URL ?? 'https://codecraftapi.com/v1',
   cacheTtlSeconds: parseInt(process.env.AI_CACHE_TTL_SECONDS ?? '900', 10),
 }));
 
@@ -138,4 +143,19 @@ export const storageConfig = registerAs('storage', () => ({
   s3AccessKeyId: process.env.STORAGE_S3_ACCESS_KEY_ID,
   s3SecretAccessKey: process.env.STORAGE_S3_SECRET_ACCESS_KEY,
   s3PublicBaseUrl: process.env.STORAGE_S3_PUBLIC_BASE_URL || undefined,
+}));
+
+export const opportunitiesConfig = registerAs('opportunities', () => ({
+  assetMaxSizeMb: parseInt(
+    process.env.OPPORTUNITY_ASSET_MAX_SIZE_MB ?? '15',
+    10,
+  ),
+  assetUrlTtlSeconds: parseInt(
+    process.env.OPPORTUNITY_ASSET_URL_TTL_SECONDS ?? '900',
+    10,
+  ),
+  shareBaseUrl:
+    process.env.OPPORTUNITY_SHARE_BASE_URL ||
+    `${process.env.CLIENT_URL ?? 'http://localhost:5173'}/share`,
+  aiMaxTokens: parseInt(process.env.OPPORTUNITY_AI_MAX_TOKENS ?? '2048', 10),
 }));

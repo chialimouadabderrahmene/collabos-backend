@@ -2,16 +2,18 @@ import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalStorageProvider } from './local-storage.provider';
 
-const { mkdirMock, writeFileMock, rmMock } = vi.hoisted(() => ({
+const { mkdirMock, writeFileMock, rmMock, readFileMock } = vi.hoisted(() => ({
   mkdirMock: vi.fn().mockResolvedValue(undefined),
   writeFileMock: vi.fn().mockResolvedValue(undefined),
   rmMock: vi.fn().mockResolvedValue(undefined),
+  readFileMock: vi.fn().mockResolvedValue(Buffer.from('data')),
 }));
 
 vi.mock('node:fs/promises', () => ({
   mkdir: mkdirMock,
   writeFile: writeFileMock,
   rm: rmMock,
+  readFile: readFileMock,
 }));
 
 function buildConfig() {
@@ -104,5 +106,51 @@ describe('LocalStorageProvider', () => {
         provider.verifySignedUrl('private/other.pdf', expires, signature),
       ).toBe(false);
     });
+  });
+
+  describe('path traversal protection', () => {
+    it.each([
+      '../outside.txt',
+      'a/../../outside.txt',
+      '/etc/passwd',
+      'a\\..\\b',
+      '',
+      'a//b',
+    ])('refuses unsafe key %j', async (key) => {
+      await expect(
+        provider.upload({
+          key,
+          buffer: Buffer.from('x'),
+          contentType: 'text/plain',
+        }),
+      ).rejects.toThrow('Invalid storage key');
+      await expect(provider.delete(key)).rejects.toThrow('Invalid storage key');
+      expect(provider.verifySignedUrl(key, Date.now() + 1000, 'sig')).toBe(
+        false,
+      );
+    });
+
+    it('never writes outside the storage root', async () => {
+      await expect(
+        provider.upload({
+          key: '../escape.png',
+          buffer: Buffer.from('x'),
+          contentType: 'image/png',
+        }),
+      ).rejects.toThrow();
+      expect(writeFileMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('refuses to sign without a signing secret', async () => {
+    const unsigned = new LocalStorageProvider({
+      get: vi.fn((key: string) =>
+        key === 'storage.signingSecret' ? undefined : '/tmp/uploads',
+      ),
+    } as unknown as ConfigService);
+
+    await expect(unsigned.getSignedUrl('a/b.png', 60)).rejects.toThrow(
+      'STORAGE_SIGNING_SECRET',
+    );
   });
 });

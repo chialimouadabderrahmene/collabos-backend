@@ -27,6 +27,9 @@ async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
   const configService = app.get(ConfigService);
 
+  // Structured opportunity documents can reach 1 MB (DOCUMENT_LIMITS); the
+  // Express default of 100 kB would reject them before validation runs.
+  app.useBodyParser('json', { limit: '2mb' });
   app.use(helmet());
   app.use(compression());
   app.enableShutdownHooks();

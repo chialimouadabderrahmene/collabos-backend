@@ -1,0 +1,155 @@
+# Production Compose for the CollabOS backend on a shared VPS.
+#
+# NOT YET VERIFIED AGAINST A REAL HOST. Written from the application's own
+# requirements (src/config/env.validation.ts, Dockerfile) only — no VPS has
+# been inspected yet. Before first use on the real server:
+#   - confirm ${COLLABOS_API_HOST_PORT} doesn't collide with anything already
+#     running there (see docs/vps-deployment-audit.md once it exists)
+#   - confirm the external network/proxy this attaches to, if the VPS already
+#     runs Nginx/Caddy/Traefik in front of other services
+#
+# Postgres and Redis are deliberately not published to the host — only the
+# API is, and only on an internal port that the host's reverse proxy reaches
+# over loopback/the docker network. Nothing here binds 5432 or 6379 publicly.
+#
+# All real values (passwords, Stripe keys, etc.) come from a single
+# .env.production file on the VPS (see .env.production.example), which is
+# never copied into an image and never committed.
+
+services:
+  collabos-postgres:
+    image: postgres:16.4-alpine
+    container_name: collabos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - collabos_postgres_data:/var/lib/postgresql/data
+    networks:
+      - collabos-internal
+    # No `ports:` — intentionally not reachable from the host or the public
+    # internet. The API reaches it by service name on collabos-internal.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  collabos-redis:
+    image: redis:7.4-alpine
+    container_name: collabos-redis
+    restart: unless-stopped
+    # --requirepass keeps Redis authenticated even though it's already
+    # internal-only, as defense in depth on a shared host.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      # The `command:` line above is substituted by Compose at parse time
+      # (from --env-file), so redis-server itself gets the real password
+      # regardless of this. This is separate and purely for the healthcheck
+      # below, which runs `redis-cli` *inside* the running container and
+      # needs REDIS_PASSWORD as an actual process env var there to expand
+      # $$REDIS_PASSWORD — without this the healthcheck silently tries an
+      # empty password and fails with WRONGPASS forever.
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - collabos_redis_data:/data
+    networks:
+      - collabos-internal
+    # No `ports:` — same reasoning as Postgres.
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  collabos-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: collabos-backend:${COLLABOS_IMAGE_TAG:-latest}
+    container_name: collabos-api
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      # Service-name DNS on the internal network, not localhost — these two
+      # intentionally override whatever .env.production has for local dev,
+      # since only this Compose file knows the real container hostnames.
+      REDIS_HOST: collabos-redis
+      REDIS_PORT: 6379
+    depends_on:
+      collabos-postgres:
+        condition: service_healthy
+      collabos-redis:
+        condition: service_healthy
+    networks:
+      - collabos-internal
+    ports:
+      # COLLABOS_API_BIND_HOST defaults to loopback (safe everywhere, matches
+      # any local/dev use of this file). On a host where the reverse proxy
+      # itself runs in its own Docker container (this VPS: Caddy, owned by a
+      # different project), 127.0.0.1 as seen INSIDE that container is its
+      # own loopback, not the host's — Caddy cannot reach it there. The fix
+      # is binding this port to the specific host IP of the proxy's Docker
+      # bridge gateway instead (set in .env.production, not here — this file
+      # stays host-agnostic). Binding to a specific IP, not 0.0.0.0, is what
+      # actually guarantees privacy: the kernel only accepts connections
+      # addressed to that exact IP, so traffic arriving at the VPS's public
+      # IP is refused at the socket level regardless of how Docker's own
+      # iptables rules interact with UFW's — not something a UFW rule alone
+      # can be trusted to guarantee (Docker-published ports are well known to
+      # bypass UFW's chain depending on host config). A scoped UFW rule is
+      # added on top as defense in depth, not as the sole mechanism.
+      # Default is 3002, not 3000/3001 — both already taken by other
+      # projects on the target VPS (see docs/vps-deployment-audit.md).
+      - "${COLLABOS_API_BIND_HOST:-127.0.0.1}:${COLLABOS_API_HOST_PORT:-3002}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health/live',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # Decision: STORAGE_PROVIDER=local for this first deployment
+    # (docs/vps-deployment-audit.md) — uploads must survive container
+    # replacement, never live only in the ephemeral container filesystem.
+    # One volume at /app/uploads covers every *_UPLOAD_DIR and
+    # STORAGE_LOCAL_DIR default (./uploads/avatars, .../storage, etc. —
+    # all relative to /app, the container's WORKDIR).
+    volumes:
+      - collabos_uploads:/app/uploads
+
+networks:
+  # Deliberately NOT `internal: true`: the API container needs normal
+  # outbound internet access (Stripe, SMTP, Anthropic, S3/R2, Sentry).
+  # Postgres/Redis are kept unreachable from outside the host by never
+  # publishing their ports (no `ports:` on those two services) — not by
+  # network isolation, which would also cut the API's own egress.
+  collabos-internal:
+    driver: bridge
+
+volumes:
+  collabos_postgres_data:
+    name: collabos_postgres_data
+  collabos_redis_data:
+    name: collabos_redis_data
+  collabos_uploads:
+    name: collabos_uploads
