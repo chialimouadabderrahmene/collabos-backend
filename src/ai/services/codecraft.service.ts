@@ -6,9 +6,15 @@ const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * CodeCraft API client (https://codecraftapi.com) — an OpenAI-compatible
- * chat completions API. Structured output is obtained the same way OpenAI's
- * API does it: a single forced tool/function call whose arguments are the
- * JSON we want.
+ * chat completions API.
+ *
+ * Structured output uses documented JSON mode (`response_format:
+ * {type:"json_object"}`), not forced tool-calling: CodeCraft's tool-calling
+ * path (`tools`/`tool_choice`) was verified live to return 502 consistently,
+ * while plain completions and JSON mode both return 200. The target shape
+ * (the same `AI_TOOLS[...].inputSchema` Anthropic uses for its tool
+ * definition) is instead described directly in the prompt, since no tool
+ * definition is sent.
  */
 @Injectable()
 export class CodeCraftService implements AiClient {
@@ -56,22 +62,27 @@ export class CodeCraftService implements AiClient {
     };
     maxTokens?: number;
   }): Promise<unknown> {
+    const instructedPrompt = [
+      params.prompt,
+      '',
+      `Respond with ONLY a single valid JSON object — no markdown code fences, no prose before or after — matching exactly this JSON Schema (the "${params.tool.name}" shape):`,
+      JSON.stringify(params.tool.inputSchema),
+    ].join('\n');
+
     const body = await this.chatCompletion({
       system: params.system,
-      prompt: params.prompt,
+      prompt: instructedPrompt,
       maxTokens: params.maxTokens ?? 1024,
-      tool: params.tool,
+      jsonMode: true,
     });
 
-    const toolCall = body.choices?.[0]?.message?.tool_calls?.find(
-      (call) => call.function?.name === params.tool.name,
-    );
-    if (!toolCall?.function) {
+    const content = body.choices?.[0]?.message?.content;
+    if (!content || !content.trim()) {
       throw new Error('Model did not return the requested structured output');
     }
 
     try {
-      return JSON.parse(toolCall.function.arguments) as unknown;
+      return JSON.parse(content) as unknown;
     } catch {
       throw new Error('Model returned malformed structured output');
     }
@@ -81,11 +92,7 @@ export class CodeCraftService implements AiClient {
     system: string;
     prompt: string;
     maxTokens: number;
-    tool?: {
-      name: string;
-      description: string;
-      inputSchema: Record<string, unknown>;
-    };
+    jsonMode?: boolean;
   }): Promise<CodeCraftChatCompletion> {
     if (!this.apiKey) {
       throw new Error('CodeCraft client is not configured');
@@ -105,23 +112,8 @@ export class CodeCraftService implements AiClient {
           { role: 'system', content: params.system },
           { role: 'user', content: params.prompt },
         ],
-        ...(params.tool
-          ? {
-              tools: [
-                {
-                  type: 'function',
-                  function: {
-                    name: params.tool.name,
-                    description: params.tool.description,
-                    parameters: params.tool.inputSchema,
-                  },
-                },
-              ],
-              tool_choice: {
-                type: 'function',
-                function: { name: params.tool.name },
-              },
-            }
+        ...(params.jsonMode
+          ? { response_format: { type: 'json_object' } }
           : {}),
       }),
     });
@@ -148,9 +140,6 @@ interface CodeCraftChatCompletion {
   choices?: Array<{
     message?: {
       content?: string;
-      tool_calls?: Array<{
-        function?: { name: string; arguments: string };
-      }>;
     };
   }>;
 }

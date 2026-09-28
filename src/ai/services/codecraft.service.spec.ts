@@ -55,23 +55,12 @@ describe('CodeCraftService', () => {
     expect(init.body as string).not.toContain('cc_test_key_not_real');
   });
 
-  it('completeStructured sends a forced tool call and parses its arguments', async () => {
+  it('completeStructured uses JSON mode: sends response_format=json_object, never tools/tool_choice', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: () => ({
         choices: [
-          {
-            message: {
-              tool_calls: [
-                {
-                  function: {
-                    name: 'propose_opportunity_copy',
-                    arguments: JSON.stringify({ title: 'The Quiet Knit' }),
-                  },
-                },
-              ],
-            },
-          },
+          { message: { content: JSON.stringify({ title: 'The Quiet Knit' }) } },
         ],
       }),
     });
@@ -90,15 +79,18 @@ describe('CodeCraftService', () => {
 
     expect(result).toEqual({ title: 'The Quiet Knit' });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as {
-      tools: Array<{ function: { name: string } }>;
-      tool_choice: { function: { name: string } };
-    };
-    expect(body.tools[0].function.name).toBe('propose_opportunity_copy');
-    expect(body.tool_choice.function.name).toBe('propose_opportunity_copy');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body).not.toHaveProperty('tools');
+    expect(body).not.toHaveProperty('tool_choice');
+    // The target shape is instead described in the prompt.
+    const messages = body.messages as Array<{ role: string; content: string }>;
+    const userMessage = messages.find((m) => m.role === 'user');
+    expect(userMessage?.content).toContain('propose_opportunity_copy');
+    expect(userMessage?.content).toContain('"type":"object"');
   });
 
-  it('rejects when no matching tool call is returned', async () => {
+  it('rejects when the model returns no content', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -117,22 +109,12 @@ describe('CodeCraftService', () => {
     ).rejects.toThrow('Model did not return the requested structured output');
   });
 
-  it('rejects malformed tool-call arguments instead of returning garbage', async () => {
+  it('rejects malformed JSON content instead of returning garbage', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: () => ({
-          choices: [
-            {
-              message: {
-                tool_calls: [
-                  { function: { name: 'x', arguments: '{not json' } },
-                ],
-              },
-            },
-          ],
-        }),
+        json: () => ({ choices: [{ message: { content: '{not json' } }] }),
       }),
     );
     const service = makeService();
