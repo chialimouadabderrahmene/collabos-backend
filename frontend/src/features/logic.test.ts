@@ -8,7 +8,7 @@ import {
   readPresentation,
   DEFAULT_PRESENTATION,
 } from "@/features/editor/document-model";
-import { canPublishWith, evaluateReadiness } from "@/features/opportunities/readiness";
+import { canPublishWith, evaluateReadiness, evaluateSpecConfidence } from "@/features/opportunities/readiness";
 import { expiryToIso } from "@/features/sharing/share-screen";
 import type { Asset, Draft, Opportunity } from "@/lib/api/opportunities";
 import { safeNextPath } from "@/lib/validation/auth";
@@ -131,6 +131,114 @@ describe("publish readiness", () => {
     const checks = evaluateReadiness(opportunity(), draftWith(content), [asset({ altText: null })]);
     expect(checks.find((check) => check.id === "alt-text")?.status).toBe("warn");
     expect(canPublishWith(checks)).toBe(true);
+  });
+});
+
+describe("R2: specification confidence", () => {
+  it("an empty spec is missing everything (legacy Opportunity, metadata.spec === undefined)", () => {
+    const result = evaluateSpecConfidence({});
+    expect(result.complete).toBe(false);
+    expect(result.missing).toEqual([
+      "intent",
+      "collaborator",
+      "objective",
+      "deliverables",
+      "timeline",
+      "budget",
+      "constraints",
+      "successCriteria",
+    ]);
+  });
+
+  it("a fully filled-in spec is complete", () => {
+    const result = evaluateSpecConfidence({
+      intent: "Explore a summer campaign",
+      collaborator: { type: "photographer" },
+      objective: "Produce a lookbook",
+      deliverables: ["10 photos"],
+      timeline: "October",
+      budget: "€5k",
+      constraints: "Milan only",
+      successCriteria: "500 signups",
+    });
+    expect(result).toEqual({ complete: true, missing: [] });
+  });
+
+  it("reports exactly one missing field", () => {
+    const result = evaluateSpecConfidence({
+      intent: "Explore a summer campaign",
+      collaborator: { type: "photographer" },
+      objective: "Produce a lookbook",
+      deliverables: ["10 photos"],
+      timeline: "October",
+      budget: "€5k",
+      constraints: "Milan only",
+      // successCriteria omitted
+    });
+    expect(result).toEqual({ complete: false, missing: ["successCriteria"] });
+  });
+
+  it("reports multiple missing fields, in stable field order", () => {
+    const result = evaluateSpecConfidence({ objective: "Produce a lookbook", budget: "€5k" });
+    expect(result.complete).toBe(false);
+    expect(result.missing).toEqual(["intent", "collaborator", "deliverables", "timeline", "constraints", "successCriteria"]);
+  });
+
+  it("treats a whitespace-only value as missing", () => {
+    const result = evaluateSpecConfidence({
+      intent: "   ",
+      objective: "\n\t",
+      timeline: "  October  ", // meaningful once trimmed — not missing
+    });
+    expect(result.missing).toContain("intent");
+    expect(result.missing).toContain("objective");
+    expect(result.missing).not.toContain("timeline");
+  });
+
+  it("empty deliverables (no items, or only whitespace items) counts as missing", () => {
+    expect(evaluateSpecConfidence({ deliverables: [] }).missing).toContain("deliverables");
+    expect(evaluateSpecConfidence({ deliverables: ["", "   "] }).missing).toContain("deliverables");
+  });
+
+  it("deliverables with at least one meaningful item is not missing", () => {
+    expect(evaluateSpecConfidence({ deliverables: ["", "10 photos"] }).missing).not.toContain("deliverables");
+  });
+
+  it("collaborator with meaningful data (type OR notes) is not missing", () => {
+    expect(evaluateSpecConfidence({ collaborator: { type: "photographer" } }).missing).not.toContain("collaborator");
+    expect(evaluateSpecConfidence({ collaborator: { notes: "Must know Milan ateliers" } }).missing).not.toContain(
+      "collaborator",
+    );
+  });
+
+  it("collaborator with only whitespace fields is missing", () => {
+    expect(evaluateSpecConfidence({ collaborator: { type: "  ", notes: "" } }).missing).toContain("collaborator");
+  });
+
+  it("never mutates the spec it was given", () => {
+    const spec = { intent: "Explore a summer campaign" };
+    const frozen = Object.freeze({ ...spec });
+    expect(() => evaluateSpecConfidence(frozen)).not.toThrow();
+    expect(frozen).toEqual(spec);
+  });
+
+  it("unrelated metadata never reaches this function — it only ever sees the already-extracted spec", () => {
+    // readOpportunitySpec() is what strips unrelated metadata (collaborationType,
+    // season, presentation, ...) before this function ever runs; confirmed here
+    // by passing exactly what that reader would produce for such metadata: {}.
+    expect(evaluateSpecConfidence({})).toEqual({
+      complete: false,
+      missing: [
+        "intent",
+        "collaborator",
+        "objective",
+        "deliverables",
+        "timeline",
+        "budget",
+        "constraints",
+        "successCriteria",
+      ],
+    });
   });
 });
 

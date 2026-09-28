@@ -89,6 +89,43 @@ describe("SpecificationSection", () => {
     expect(onChange).toHaveBeenCalledWith({ deliverables: ["10 photos", "3 reels"] });
   });
 
+  it("R2: shows a plain 'ready' note for a complete spec, no score or judgment", () => {
+    const complete: OpportunitySpec = {
+      intent: "x",
+      collaborator: { type: "photographer" },
+      objective: "x",
+      deliverables: ["x"],
+      timeline: "x",
+      budget: "x",
+      constraints: "x",
+      successCriteria: "x",
+    };
+    render(<SpecificationSection spec={complete} onChange={vi.fn()} canEdit />);
+    expect(screen.getByText("Ready for confidence.")).toBeInTheDocument();
+    expect(screen.queryByText(/needs a few details/i)).not.toBeInTheDocument();
+  });
+
+  it("R2: lists exactly what's missing for an incomplete spec, by the same field labels", () => {
+    render(
+      <SpecificationSection
+        spec={{ intent: "Explore a summer campaign", budget: "€5k" }}
+        onChange={vi.fn()}
+        canEdit
+      />,
+    );
+    expect(screen.getByText("Needs a few details:")).toBeInTheDocument();
+    expect(screen.getByText("Who you're looking for", { selector: "li" })).toBeInTheDocument();
+    expect(screen.getByText("What you're trying to achieve", { selector: "li" })).toBeInTheDocument();
+    expect(screen.getByText("How you'll know it worked", { selector: "li" })).toBeInTheDocument();
+    // Already filled in — not listed as missing.
+    expect(screen.queryByText("Why this exists", { selector: "li" })).not.toBeInTheDocument();
+  });
+
+  it("R2: a legacy Opportunity (empty spec) reads as not yet established, not an error", () => {
+    render(<SpecificationSection spec={{}} onChange={vi.fn()} canEdit />);
+    expect(screen.getByText("Needs a few details:")).toBeInTheDocument();
+  });
+
   it("disables every field when the user cannot edit", () => {
     render(<SpecificationSection spec={{ intent: "x" }} onChange={vi.fn()} canEdit={false} />);
     expect(screen.getByLabelText("Why this exists")).toBeDisabled();

@@ -4,6 +4,7 @@ import {
   isDocNode,
   plainText,
   type DocNode,
+  type OpportunitySpec,
 } from "@/features/editor/document-model";
 import type { Asset, Draft, Opportunity } from "@/lib/api/opportunities";
 
@@ -123,4 +124,69 @@ export function evaluateReadiness(
 
 export function canPublishWith(checks: ReadinessCheck[]): boolean {
   return checks.every((check) => check.status !== "fail");
+}
+
+/* ------------------------------------------------------- R2: confidence */
+
+/**
+ * R2 — SPECIFICITY → CONFIDENCE. A separate, deliberately narrow check from
+ * `evaluateReadiness` above: that one gates *publishing* (document
+ * completeness); this one only answers "what structured R1 information is
+ * still missing?" — it never blocks anything and never judges quality,
+ * viability or likelihood of success (see docs/adr/0008-opportunity-spec.md
+ * in collabos-backend, which R2 extends conceptually without adding a
+ * matching backend change of its own — R2 is frontend-only, see below).
+ *
+ * Stable, machine-readable keys — one per OpportunitySpec field, matching
+ * the backend schema's field names exactly. Human-readable labels are a UI
+ * concern (see SPEC_FIELD_LABELS in properties-panel.tsx), not this
+ * function's.
+ */
+export type SpecFieldKey =
+  | "intent"
+  | "collaborator"
+  | "objective"
+  | "deliverables"
+  | "timeline"
+  | "budget"
+  | "constraints"
+  | "successCriteria";
+
+export interface SpecConfidence {
+  complete: boolean;
+  missing: SpecFieldKey[];
+}
+
+const SPEC_FIELD_ORDER: SpecFieldKey[] = [
+  "intent",
+  "collaborator",
+  "objective",
+  "deliverables",
+  "timeline",
+  "budget",
+  "constraints",
+  "successCriteria",
+];
+
+function hasText(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Pure and deterministic: same input, same output, no side effects, never
+ * touches stored data. Legacy/absent spec (`{}`) reads as "everything
+ * missing" — a safe, honest "not yet established" rather than a crash or a
+ * false "complete". */
+export function evaluateSpecConfidence(spec: OpportunitySpec): SpecConfidence {
+  const missing = SPEC_FIELD_ORDER.filter((key) => {
+    switch (key) {
+      case "collaborator":
+        return !hasText(spec.collaborator?.type) && !hasText(spec.collaborator?.notes);
+      case "deliverables":
+        return !(spec.deliverables ?? []).some((item) => hasText(item));
+      default:
+        return !hasText(spec[key]);
+    }
+  });
+
+  return { complete: missing.length === 0, missing };
 }

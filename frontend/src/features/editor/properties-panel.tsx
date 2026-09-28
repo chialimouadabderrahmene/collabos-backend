@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/display";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { AssetPicker } from "@/features/assets/asset-picker";
+import { evaluateSpecConfidence, type SpecFieldKey } from "@/features/opportunities/readiness";
 import { cn } from "@/lib/utils/cn";
 import { useAssetMap } from "./asset-context";
 import {
@@ -360,6 +361,43 @@ function textToDeliverables(text: string): string[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
+/** R2 — human-readable labels for SpecFieldKey, matching the field labels
+ * above exactly so a "missing" mention points at the field the user
+ * actually sees. Purely a UI concern — the pure check in readiness.ts only
+ * ever deals in the stable keys. */
+const SPEC_FIELD_LABELS: Record<SpecFieldKey, string> = {
+  intent: "Why this exists",
+  collaborator: "Who you're looking for",
+  objective: "What you're trying to achieve",
+  deliverables: "What needs to be produced",
+  timeline: "Timing",
+  budget: "Budget",
+  constraints: "Constraints",
+  successCriteria: "How you'll know it worked",
+};
+
+/** R2 — explains what's missing, never judges the opportunity. No score, no
+ * progress bar: just a plain sentence and, when incomplete, the specific
+ * fields — the same language the fields above already use. */
+function ConfidenceNote({ spec }: { spec: OpportunitySpec }) {
+  const { complete, missing } = evaluateSpecConfidence(spec);
+
+  if (complete) {
+    return <p className="text-caption text-faint">Ready for confidence.</p>;
+  }
+
+  return (
+    <div className="text-caption text-faint">
+      <p>Needs a few details:</p>
+      <ul className="mt-1 list-inside list-disc">
+        {missing.map((key) => (
+          <li key={key}>{SPEC_FIELD_LABELS[key]}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * R1 — the founder's instinct and the deal's specificity, captured
  * alongside the editorial document rather than instead of it. Every field
@@ -381,6 +419,7 @@ export function SpecificationSection({
 
   return (
     <Section title="Specification">
+      <ConfidenceNote spec={spec} />
       <CommitInput
         label="Why this exists"
         multiline
