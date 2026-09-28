@@ -138,6 +138,19 @@ export interface SharedOpportunity {
   expiresAt: string | null;
 }
 
+/** R3 — a user-recorded judgment about an Opportunity, always pinned to the
+ * exact published version it was made about. Never computed, never AI-set. */
+export type DecisionStatus = "GO" | "HOLD" | "NO_GO";
+
+export interface Decision {
+  id: string;
+  status: DecisionStatus;
+  versionNumber: number;
+  rationale: string;
+  decidedById: string;
+  decidedAt: string;
+}
+
 export type ActivityType =
   | "CREATED"
   | "UPDATED"
@@ -149,7 +162,8 @@ export type ActivityType =
   | "SHARE_LINK_REVOKED"
   | "MEMBER_ADDED"
   | "MEMBER_REMOVED"
-  | "AI_SUGGESTION_REQUESTED";
+  | "AI_SUGGESTION_REQUESTED"
+  | "DECISION_RECORDED";
 
 export interface Activity {
   id: string;
@@ -227,5 +241,12 @@ export const opportunitiesApi = {
       http.post<CreatedShareLink>(`${base(id)}/share-links`, input),
     revoke: (id: string, linkId: string) =>
       http.delete<{ message: string }>(`${base(id)}/share-links/${linkId}`),
+  },
+
+  decisions: {
+    /** Newest first. */
+    list: (id: string) => http.get<Decision[]>(`${base(id)}/decisions`),
+    create: (id: string, input: { versionNumber: number; status: DecisionStatus; rationale: string }) =>
+      http.post<Decision>(`${base(id)}/decisions`, input),
   },
 };

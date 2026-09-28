@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Archive,
+  CheckCircle2,
   ImageMinus,
   ImagePlus,
   Link2,
@@ -38,6 +39,11 @@ const LABELS: Record<ActivityType, { icon: LucideIcon; text: (activity: Activity
   MEMBER_ADDED: { icon: UserPlus, text: (activity) => `Added a collaborator (${String(activity.metadata?.role ?? "").toLowerCase()})` },
   MEMBER_REMOVED: { icon: UserMinus, text: () => "Removed a collaborator" },
   AI_SUGGESTION_REQUESTED: { icon: Sparkles, text: (activity) => `Requested AI ${String(activity.metadata?.kind ?? "").toLowerCase().replace(/_/g, " ")}` },
+  DECISION_RECORDED: {
+    icon: CheckCircle2,
+    text: (activity) =>
+      `Recorded ${String(activity.metadata?.status ?? "").replace(/_/g, " ")} for v${String(activity.metadata?.versionNumber ?? "")}`,
+  },
 };
 
 export function ActivityFeed({ opportunityId }: { opportunityId: string }) {

@@ -35,6 +35,7 @@ vi.mock("@/lib/api/opportunities", () => ({
     version: vi.fn(),
     members: { list: vi.fn(), add: vi.fn(), remove: vi.fn() },
     shareLinks: { list: vi.fn(), create: vi.fn(), revoke: vi.fn() },
+    decisions: { list: vi.fn(), create: vi.fn() },
   },
 }));
 vi.mock("@/lib/api/brands", () => ({

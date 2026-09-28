@@ -18,6 +18,7 @@ import { queryKeys } from "@/lib/api/query-keys";
 import { formatDate, formatRelative } from "@/lib/utils/format";
 import { ActivityFeed } from "./activity-feed";
 import { Collaborators } from "./collaborators";
+import { DecisionSection } from "./decision-section";
 import { useArchiveOpportunity, useOpportunity } from "./hooks";
 
 export function OpportunityOverview({ opportunityId }: { opportunityId: string }) {
@@ -175,6 +176,16 @@ export function OpportunityOverview({ opportunityId }: { opportunityId: string }
               </Card>
             )}
           </section>
+
+          {can.manage && !archived && (
+            <DecisionSection
+              opportunityId={data.id}
+              brandId={data.brandId}
+              metadata={data.metadata}
+              latestVersion={latest}
+              canDecide={can.manage}
+            />
+          )}
 
           <section aria-labelledby="activity">
             <SectionHeader title={<span id="activity">Activity</span>} />

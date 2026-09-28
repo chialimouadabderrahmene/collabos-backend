@@ -108,6 +108,7 @@ export const queryKeys = {
     versions: (id: string) => ["opportunities", id, "versions"] as const,
     version: (id: string, n: number) => ["opportunities", id, "versions", n] as const,
     shareLinks: (id: string) => ["opportunities", id, "share-links"] as const,
+    decisions: (id: string) => ["opportunities", id, "decisions"] as const,
     activity: (id: string) => ["opportunities", id, "activity"] as const,
     members: (id: string) => ["opportunities", id, "members"] as const,
     suggestions: (id: string) => ["opportunities", id, "ai-suggestions"] as const,
