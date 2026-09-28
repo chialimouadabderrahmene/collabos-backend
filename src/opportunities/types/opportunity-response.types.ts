@@ -4,6 +4,7 @@ import {
   OpportunityAiSuggestionKind,
   OpportunityAiSuggestionStatus,
   OpportunityAssetKind,
+  OpportunityDecisionStatus,
   OpportunityMemberRole,
   OpportunityStatus,
 } from '@prisma/client';
@@ -155,6 +156,19 @@ export class CreatedShareLinkResponse extends ShareLinkResponse {
   })
   token!: string;
   @ApiProperty() url!: string;
+}
+
+/// R3: a recorded GO/HOLD/NO_GO judgment, always pinned to a specific
+/// immutable published version. Write-once — there is no update endpoint.
+export class DecisionResponse {
+  @ApiProperty() id!: string;
+  @ApiProperty({ enum: OpportunityDecisionStatus })
+  status!: OpportunityDecisionStatus;
+  @ApiProperty({ description: 'The published version this decision is about' })
+  versionNumber!: number;
+  @ApiProperty() rationale!: string;
+  @ApiProperty() decidedById!: string;
+  @ApiProperty() decidedAt!: Date;
 }
 
 export class SharedBrandResponse {

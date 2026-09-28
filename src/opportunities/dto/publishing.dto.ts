@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OpportunityAssetKind } from '@prisma/client';
+import {
+  OpportunityAssetKind,
+  OpportunityDecisionStatus,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
@@ -8,6 +11,7 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
   Min,
 } from 'class-validator';
 
@@ -67,4 +71,27 @@ export class CreateShareLinkDto {
   @IsString()
   @MaxLength(120)
   label?: string;
+}
+
+export class CreateDecisionDto {
+  @ApiProperty({
+    minimum: 1,
+    description: 'The exact published version this decision is about',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  versionNumber!: number;
+
+  @ApiProperty({ enum: OpportunityDecisionStatus })
+  @IsEnum(OpportunityDecisionStatus)
+  status!: OpportunityDecisionStatus;
+
+  @ApiProperty({
+    description: 'User-authored rationale. Never generated or edited by AI.',
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  rationale!: string;
 }

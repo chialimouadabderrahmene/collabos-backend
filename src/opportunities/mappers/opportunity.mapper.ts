@@ -2,6 +2,7 @@ import {
   Opportunity,
   OpportunityActivity,
   OpportunityAiSuggestion,
+  OpportunityDecision,
   OpportunityShareLink,
   OpportunityVersion,
 } from '@prisma/client';
@@ -9,6 +10,7 @@ import { OpportunityCapabilities } from '../services/opportunity-access.service'
 import {
   ActivityResponse,
   AiSuggestionResponse,
+  DecisionResponse,
   OpportunityResponse,
   ShareLinkResponse,
   ShareLinkStatus,
@@ -84,6 +86,20 @@ export function toShareLinkResponse(
     lastAccessedAt: link.lastAccessedAt,
     createdById: link.createdById,
     createdAt: link.createdAt,
+  };
+}
+
+export function toDecisionResponse(
+  decision: OpportunityDecision,
+  versionNumber: number,
+): DecisionResponse {
+  return {
+    id: decision.id,
+    status: decision.status,
+    versionNumber,
+    rationale: decision.rationale,
+    decidedById: decision.decidedById,
+    decidedAt: decision.decidedAt,
   };
 }
 

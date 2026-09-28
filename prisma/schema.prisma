@@ -97,6 +97,7 @@ model User {
   opportunityShareLinksCreated OpportunityShareLink[]    @relation("OpportunityShareLinkCreator")
   opportunityAiSuggestions     OpportunityAiSuggestion[] @relation("OpportunityAiSuggestionRequester")
   opportunityActivities        OpportunityActivity[]     @relation("OpportunityActivityActor")
+  opportunityDecisionsRecorded OpportunityDecision[]     @relation("OpportunityDecisionDecider")
 
   @@map("users")
 }
@@ -1479,6 +1480,14 @@ enum OpportunityActivityType {
   MEMBER_ADDED
   MEMBER_REMOVED
   AI_SUGGESTION_REQUESTED
+  DECISION_RECORDED
+}
+
+/// R3: GO / HOLD / NO_GO, user-recorded. Never computed, never AI-generated.
+enum OpportunityDecisionStatus {
+  GO
+  HOLD
+  NO_GO
 }
 
 /// An editorial Opportunity owned by a Brand. Never hard-deleted once it has
@@ -1509,6 +1518,7 @@ model Opportunity {
   shareLinks    OpportunityShareLink[]
   aiSuggestions OpportunityAiSuggestion[]
   activities    OpportunityActivity[]
+  decisions     OpportunityDecision[]
 
   @@index([brandId, status])
   @@index([createdById])
@@ -1576,6 +1586,7 @@ model OpportunityVersion {
 
   assets     OpportunityVersionAsset[]
   shareLinks OpportunityShareLink[]
+  decisions  OpportunityDecision[]
 
   @@unique([opportunityId, versionNumber])
   @@map("opportunity_versions")
@@ -1645,6 +1656,30 @@ model OpportunityShareLink {
   @@index([opportunityId])
   @@index([versionId])
   @@map("opportunity_share_links")
+}
+
+/// R3: a user-recorded GO/HOLD/NO_GO judgment about an Opportunity, pinned to
+/// the exact immutable published version it was made against. Write-once:
+/// there is no update/delete path in the app layer, and — like
+/// opportunity_versions — this table's rows are meant to stay history;
+/// changing a decision means recording a new one, not editing the old one.
+model OpportunityDecision {
+  id            String                    @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity               @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+  versionId     String
+  version       OpportunityVersion        @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  status        OpportunityDecisionStatus
+  /// User-authored. Never generated or rewritten by AI.
+  rationale     String
+  decidedById   String
+  decidedBy     User                      @relation("OpportunityDecisionDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt     DateTime                  @default(now())
+  createdAt     DateTime                  @default(now())
+
+  @@index([opportunityId])
+  @@index([versionId])
+  @@map("opportunity_decisions")
 }
 
 /// AI output stored as a suggestion. Never applied to the draft by the

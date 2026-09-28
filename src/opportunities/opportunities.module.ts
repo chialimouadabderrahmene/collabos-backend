@@ -10,6 +10,7 @@ import { OpportunitiesController } from './opportunities.controller';
 import { OpportunityAiController } from './opportunity-ai.controller';
 import { OpportunityAssetsController } from './opportunity-assets.controller';
 import { OpportunityContentController } from './opportunity-content.controller';
+import { OpportunityDecisionsController } from './opportunity-decisions.controller';
 import { OpportunityShareLinksController } from './opportunity-share-links.controller';
 import { AssetUrlService } from './services/asset-url.service';
 import { OpportunitiesService } from './services/opportunities.service';
@@ -17,6 +18,7 @@ import { OpportunityAccessService } from './services/opportunity-access.service'
 import { OpportunityActivityService } from './services/opportunity-activity.service';
 import { OpportunityAiService } from './services/opportunity-ai.service';
 import { OpportunityAssetsService } from './services/opportunity-assets.service';
+import { OpportunityDecisionsService } from './services/opportunity-decisions.service';
 import { OpportunityDocumentService } from './services/opportunity-document.service';
 import { OpportunityDraftService } from './services/opportunity-draft.service';
 import { OpportunityMembersService } from './services/opportunity-members.service';
@@ -26,7 +28,8 @@ import { ShareController } from './share.controller';
 
 /**
  * Opportunity Creation Studio: Opportunity → Draft → Assets → AI suggestions
- * → Publish (immutable versions) → Private share links.
+ * → Publish (immutable versions) → Private share links → GO/HOLD/NO_GO
+ * decisions recorded against a specific published version.
  */
 @Module({
   imports: [
@@ -55,6 +58,7 @@ import { ShareController } from './share.controller';
     OpportunityContentController,
     OpportunityAssetsController,
     OpportunityShareLinksController,
+    OpportunityDecisionsController,
     OpportunityAiController,
     ShareController,
   ],
@@ -69,6 +73,7 @@ import { ShareController } from './share.controller';
     OpportunityAssetsService,
     OpportunityPublishService,
     OpportunityShareLinksService,
+    OpportunityDecisionsService,
     OpportunityAiService,
     OpportunityPublishedHandler,
   ],
