@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -13,7 +14,8 @@ import {
   OpportunityAiSuggestionStatus,
   Prisma,
 } from '@prisma/client';
-import { AnthropicService } from '../../ai/services/anthropic.service';
+import { AI_CLIENT } from '../../ai/interfaces/ai-client.interface';
+import type { AiClient } from '../../ai/interfaces/ai-client.interface';
 import type { AuthenticatedUser } from '../../auth/interfaces/jwt-payload.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -21,7 +23,15 @@ import {
   AI_SYSTEM_PROMPT,
   AI_TASK_INSTRUCTIONS,
   AI_TOOLS,
+  GAPS_OUTPUT_SCHEMA,
+  GAPS_TASK_INSTRUCTION,
+  GAPS_TOOL,
 } from '../ai/opportunity-ai-tasks';
+import {
+  OpportunitySpec,
+  opportunitySpecSchema,
+} from '../schemas/opportunity-spec.schema';
+import { evaluateSpecConfidence } from '../schemas/opportunity-spec-confidence';
 import {
   GenerateCopyDto,
   ListAiSuggestionsQueryDto,
@@ -31,6 +41,7 @@ import {
 import { toAiSuggestionResponse } from '../mappers/opportunity.mapper';
 import {
   AiSuggestionResponse,
+  GapsResponse,
   PaginatedAiSuggestionsResponse,
 } from '../types/opportunity-response.types';
 import { extractPlainText } from '../utils/document.util';
@@ -65,7 +76,7 @@ export class OpportunityAiService {
     private readonly prisma: PrismaService,
     private readonly access: OpportunityAccessService,
     private readonly activity: OpportunityActivityService,
-    private readonly anthropic: AnthropicService,
+    @Inject(AI_CLIENT) private readonly ai: AiClient,
     private readonly configService: ConfigService,
   ) {}
 
@@ -204,7 +215,7 @@ export class OpportunityAiService {
       OpportunityAction.EDIT,
     );
 
-    if (!this.anthropic.isConfigured()) {
+    if (!this.ai.isConfigured()) {
       throw new ServiceUnavailableException('AI assistance is not configured');
     }
 
@@ -214,7 +225,7 @@ export class OpportunityAiService {
 
     let raw: unknown;
     try {
-      raw = await this.anthropic.completeStructured({
+      raw = await this.ai.completeStructured({
         system: AI_SYSTEM_PROMPT,
         prompt,
         tool,
@@ -237,7 +248,7 @@ export class OpportunityAiService {
       throw new BadGatewayException('The AI returned an unexpected response');
     }
 
-    const model = this.anthropic.getModel();
+    const model = this.ai.getModel();
     const suggestion = await this.prisma.$transaction(async (tx) => {
       const created = await tx.opportunityAiSuggestion.create({
         data: {
@@ -298,36 +309,113 @@ export class OpportunityAiService {
     return toAiSuggestionResponse(suggestion);
   }
 
+  /** Shared context-gathering for both the existing suggestion tasks and
+   * R5 gaps — pure data fetching, no task-specific wording. */
+  private async fetchAiContext(
+    opportunityId: string,
+    brandId: string,
+  ): Promise<{
+    draftText: string;
+    assets: string;
+    assetDescriptions: string[];
+    brand: {
+      name: string;
+      profile: {
+        description: string | null;
+        location: string | null;
+        foundedYear: number | null;
+      } | null;
+    } | null;
+  }> {
+    const [draft, assetKinds, describedAssets, brand] = await Promise.all([
+      this.prisma.opportunityDraft.findUnique({
+        where: { opportunityId },
+        select: { content: true },
+      }),
+      this.prisma.opportunityAsset.groupBy({
+        by: ['kind'],
+        where: { opportunityId, deletedAt: null },
+        _count: { _all: true },
+      }),
+      // A few real alt-text descriptions give the model something concrete
+      // to reference beyond a bare count — never the images themselves (no
+      // image understanding), just text the user already wrote.
+      this.prisma.opportunityAsset.findMany({
+        where: { opportunityId, deletedAt: null, altText: { not: null } },
+        select: { altText: true },
+        take: 10,
+      }),
+      this.prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          name: true,
+          profile: {
+            select: { description: true, location: true, foundedYear: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      draftText: draft ? extractPlainText(draft.content) : '',
+      assets: assetKinds
+        .map((group) => `${group._count._all} ${group.kind.toLowerCase()}`)
+        .join(', '),
+      assetDescriptions: describedAssets
+        .map((asset) => asset.altText)
+        .filter((text): text is string => Boolean(text)),
+      brand,
+    };
+  }
+
+  /** The `<opportunity>...</opportunity>` block shared by every task,
+   * including R5 gaps — kept separate from task-specific instructions. */
+  private buildOpportunityBlock(
+    opportunity: OpportunityAccessContext['opportunity'],
+    spec: OpportunitySpec | undefined,
+    ctx: Awaited<ReturnType<OpportunityAiService['fetchAiContext']>>,
+  ): string[] {
+    return [
+      '<opportunity>',
+      `Title: ${opportunity.title}`,
+      opportunity.summary ? `Summary: ${opportunity.summary}` : '',
+      ctx.brand ? this.formatBrandContext(ctx.brand) : '',
+      spec ? this.formatSpec(spec) : '',
+      opportunity.latestVersionNumber > 0
+        ? `Previously published: version ${opportunity.latestVersionNumber}${
+            opportunity.lastPublishedAt
+              ? ` (${opportunity.lastPublishedAt.toISOString().slice(0, 10)})`
+              : ''
+          }`
+        : '',
+      ctx.assets ? `Visual assets uploaded: ${ctx.assets}` : '',
+      ctx.assetDescriptions.length > 0
+        ? `Asset descriptions: ${ctx.assetDescriptions.join('; ')}`
+        : '',
+      ctx.draftText
+        ? `Current draft text: ${ctx.draftText}`
+        : 'Current draft: empty',
+      '</opportunity>',
+    ];
+  }
+
+  private readSpec(metadata: unknown): OpportunitySpec | undefined {
+    const result = opportunitySpecSchema.safeParse(
+      (metadata as Record<string, unknown> | null)?.spec,
+    );
+    return result.success ? result.data : undefined;
+  }
+
   private async buildPrompt(
     context: OpportunityAccessContext,
     request: SuggestionRequest,
   ): Promise<string> {
     const { opportunity } = context;
-    const [draft, assetKinds] = await Promise.all([
-      this.prisma.opportunityDraft.findUnique({
-        where: { opportunityId: opportunity.id },
-        select: { content: true },
-      }),
-      this.prisma.opportunityAsset.groupBy({
-        by: ['kind'],
-        where: { opportunityId: opportunity.id, deletedAt: null },
-        _count: { _all: true },
-      }),
-    ]);
-
-    const draftText = draft ? extractPlainText(draft.content) : '';
-    const assets = assetKinds
-      .map((group) => `${group._count._all} ${group.kind.toLowerCase()}`)
-      .join(', ');
+    const ctx = await this.fetchAiContext(opportunity.id, opportunity.brandId);
+    const spec = this.readSpec(opportunity.metadata);
 
     const sections = [
-      '<opportunity>',
-      `Title: ${opportunity.title}`,
-      opportunity.summary ? `Summary: ${opportunity.summary}` : '',
-      `Metadata: ${JSON.stringify(opportunity.metadata).slice(0, 2000)}`,
-      assets ? `Visual assets uploaded: ${assets}` : '',
-      draftText ? `Current draft text: ${draftText}` : 'Current draft: empty',
-      '</opportunity>',
+      ...this.buildOpportunityBlock(opportunity, spec, ctx),
       request.founderInput
         ? `<founder_input>\n${request.founderInput}\n</founder_input>`
         : '',
@@ -336,5 +424,131 @@ export class OpportunityAiService {
     ];
 
     return sections.filter(Boolean).join('\n');
+  }
+
+  private async buildGapsPrompt(
+    context: OpportunityAccessContext,
+    spec: OpportunitySpec,
+    missing: string[],
+  ): Promise<string> {
+    const { opportunity } = context;
+    const ctx = await this.fetchAiContext(opportunity.id, opportunity.brandId);
+
+    const sections = [
+      ...this.buildOpportunityBlock(opportunity, spec, ctx),
+      `Missing specification fields (only ask about these — never invent others): ${missing.join(', ')}`,
+      `Task: ${GAPS_TASK_INSTRUCTION}`,
+    ];
+
+    return sections.filter(Boolean).join('\n');
+  }
+
+  /**
+   * R5 — CONFIDENCE → "what should I clarify, and why?". R2's deterministic
+   * `evaluateSpecConfidence` is the only source of truth for what is
+   * missing; the AI never decides that on its own, and its output is
+   * filtered back down to exactly that set afterward. Purely informational:
+   * nothing here is stored, nothing writes to the spec, draft or a
+   * decision.
+   */
+  async gaps(
+    opportunityId: string,
+    user: AuthenticatedUser,
+  ): Promise<GapsResponse> {
+    const context = await this.access.authorize(
+      opportunityId,
+      user,
+      OpportunityAction.EDIT,
+    );
+
+    if (!this.ai.isConfigured()) {
+      throw new ServiceUnavailableException('AI assistance is not configured');
+    }
+
+    const spec = this.readSpec(context.opportunity.metadata) ?? {};
+    const { missing } = evaluateSpecConfidence(spec);
+
+    if (missing.length === 0) {
+      return { gaps: [] };
+    }
+
+    const prompt = await this.buildGapsPrompt(context, spec, missing);
+
+    let raw: unknown;
+    try {
+      raw = await this.ai.completeStructured({
+        system: AI_SYSTEM_PROMPT,
+        prompt,
+        tool: GAPS_TOOL,
+        maxTokens: this.configService.get<number>('opportunities.aiMaxTokens'),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `AI gaps request failed opportunity=${opportunityId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+      throw new BadGatewayException('The AI provider request failed');
+    }
+
+    const parsed = GAPS_OUTPUT_SCHEMA.safeParse(raw);
+    if (!parsed.success) {
+      this.logger.warn(
+        `AI returned invalid gaps output opportunity=${opportunityId}`,
+      );
+      throw new BadGatewayException('The AI returned an unexpected response');
+    }
+
+    // R2 stays the source of truth even after the model answers: any key
+    // it proposes that isn't actually in `missing` is dropped, not trusted.
+    const missingSet = new Set<string>(missing);
+    const gaps = parsed.data.gaps
+      .filter((gap) => missingSet.has(gap.key))
+      .slice(0, 5);
+
+    return { gaps };
+  }
+
+  /** Human-readable brand context — never contact details, just enough for
+   * the model to place the opportunity: who the brand is, roughly. */
+  private formatBrandContext(brand: {
+    name: string;
+    profile: {
+      description: string | null;
+      location: string | null;
+      foundedYear: number | null;
+    } | null;
+  }): string {
+    const parts = [
+      `Brand: ${brand.name}`,
+      brand.profile?.description,
+      brand.profile?.location ? `Based in ${brand.profile.location}` : null,
+      brand.profile?.foundedYear
+        ? `Founded ${brand.profile.foundedYear}`
+        : null,
+    ].filter(Boolean);
+    return parts.join(' — ');
+  }
+
+  /** R1's structured spec, rendered as labeled lines rather than a raw JSON
+   * dump, so the model reads the same fields the user filled in the Studio
+   * Properties panel. Read-only here — AI never writes the spec back. */
+  private formatSpec(spec: OpportunitySpec): string {
+    const lines = [
+      spec.intent ? `Why this exists: ${spec.intent}` : '',
+      spec.collaborator?.type ? `Looking for: ${spec.collaborator.type}` : '',
+      spec.collaborator?.notes
+        ? `What makes them the right fit: ${spec.collaborator.notes}`
+        : '',
+      spec.objective ? `Objective: ${spec.objective}` : '',
+      spec.deliverables?.length
+        ? `Deliverables: ${spec.deliverables.join(', ')}`
+        : '',
+      spec.timeline ? `Timing: ${spec.timeline}` : '',
+      spec.budget ? `Budget: ${spec.budget}` : '',
+      spec.constraints ? `Constraints: ${spec.constraints}` : '',
+      spec.successCriteria ? `Success looks like: ${spec.successCriteria}` : '',
+    ].filter(Boolean);
+    return lines.length > 0 ? `Specification:\n${lines.join('\n')}` : '';
   }
 }

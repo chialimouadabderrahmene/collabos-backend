@@ -94,8 +94,13 @@ export const pushConfig = registerAs('push', () => ({
 }));
 
 export const aiConfig = registerAs('ai', () => ({
+  provider: process.env.AI_PROVIDER ?? 'anthropic',
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
   model: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5-20251001',
+  codecraftApiKey: process.env.CODECRAFT_API_KEY || undefined,
+  codecraftModel: process.env.CODECRAFT_MODEL ?? 'deepseek-v4-flash-0731',
+  codecraftBaseUrl:
+    process.env.CODECRAFT_BASE_URL ?? 'https://codecraftapi.com/v1',
   cacheTtlSeconds: parseInt(process.env.AI_CACHE_TTL_SECONDS ?? '900', 10),
 }));
 

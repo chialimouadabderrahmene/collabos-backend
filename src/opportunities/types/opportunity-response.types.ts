@@ -237,3 +237,19 @@ export class PaginatedAiSuggestionsResponse {
   @ApiProperty() page!: number;
   @ApiProperty() limit!: number;
 }
+
+/** R5 — a clarifying question about one field R2 already considers missing.
+ * Never stored, never accepted/discarded: purely informational context next
+ * to Confidence. */
+export class GapResponse {
+  @ApiProperty({
+    description: 'The OpportunitySpec field this question is about.',
+  })
+  key!: string;
+  @ApiProperty() question!: string;
+  @ApiProperty() reason!: string;
+}
+
+export class GapsResponse {
+  @ApiProperty({ type: [GapResponse] }) gaps!: GapResponse[];
+}

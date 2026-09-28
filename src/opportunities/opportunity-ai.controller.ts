@@ -27,6 +27,7 @@ import {
 import { OpportunityAiService } from './services/opportunity-ai.service';
 import {
   AiSuggestionResponse,
+  GapsResponse,
   PaginatedAiSuggestionsResponse,
 } from './types/opportunity-response.types';
 
@@ -101,6 +102,20 @@ export class OpportunityAiController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<AiSuggestionResponse> {
     return this.aiService.titles(id, user);
+  }
+
+  @Get('gaps')
+  @Throttle(AI_THROTTLE)
+  @ApiOperation({
+    summary:
+      'Suggest clarifying questions for specification fields R2 already considers missing (R5). Never stored, never applied.',
+  })
+  @ApiResponse({ status: 200, type: GapsResponse })
+  gaps(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<GapsResponse> {
+    return this.aiService.gaps(id, user);
   }
 
   @Get('suggestions')

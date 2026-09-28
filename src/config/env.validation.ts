@@ -73,8 +73,12 @@ export const envSchema = z.object({
 
   PUSH_PROVIDER_WEBHOOK_URL: z.string().url().optional(),
 
+  AI_PROVIDER: z.enum(['anthropic', 'codecraft']).default('anthropic'),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-haiku-4-5-20251001'),
+  CODECRAFT_API_KEY: z.string().optional(),
+  CODECRAFT_MODEL: z.string().default('deepseek-v4-flash-0731'),
+  CODECRAFT_BASE_URL: z.string().url().default('https://codecraftapi.com/v1'),
   AI_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
 
   THROTTLE_TTL_MS: z.coerce.number().int().positive().default(60000),

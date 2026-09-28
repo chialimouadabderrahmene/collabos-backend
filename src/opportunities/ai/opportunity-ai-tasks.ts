@@ -177,3 +177,83 @@ export const AI_TASK_INSTRUCTIONS: Record<OpportunityAiSuggestionKind, string> =
     TITLES:
       'Propose 3-6 alternative titles and 1-3 alternative standfirsts for this opportunity.',
   };
+
+/**
+ * R5 — a standalone structured task, deliberately outside
+ * `OpportunityAiSuggestionKind`/`AI_OUTPUT_SCHEMAS`/`AI_TOOLS` above: gaps
+ * are never stored as an `OpportunityAiSuggestion` (nothing to accept or
+ * discard), so adding it there would need a Prisma enum migration for no
+ * reason. Same tool-call contract, same `JsonSchemaObject` shape, just not
+ * enum-keyed.
+ */
+export const GAPS_OUTPUT_SCHEMA = z.object({
+  gaps: z
+    .array(
+      z
+        .object({
+          key: z.enum([
+            'intent',
+            'collaborator',
+            'objective',
+            'deliverables',
+            'timeline',
+            'budget',
+            'constraints',
+            'successCriteria',
+          ]),
+          question: z.string().trim().min(1).max(200),
+          reason: z.string().trim().min(1).max(300),
+        })
+        .strict(),
+    )
+    .max(10),
+});
+
+export const GAPS_TOOL: {
+  name: string;
+  description: string;
+  inputSchema: JsonSchemaObject;
+} = {
+  name: 'propose_clarifying_questions',
+  description:
+    'Identify which missing specification fields are worth asking the founder to clarify, and why.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      gaps: {
+        type: 'array',
+        maxItems: 5,
+        items: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              enum: [
+                'intent',
+                'collaborator',
+                'objective',
+                'deliverables',
+                'timeline',
+                'budget',
+                'constraints',
+                'successCriteria',
+              ],
+              description: 'Which missing specification field this is about.',
+            },
+            question: stringProp(
+              'A concise, concrete question to ask the founder.',
+            ),
+            reason: stringProp(
+              'Why this is worth clarifying, grounded only in what is actually missing — never an invented fact.',
+            ),
+          },
+          required: ['key', 'question', 'reason'],
+        },
+      },
+    },
+    required: ['gaps'],
+  },
+};
+
+export const GAPS_TASK_INSTRUCTION =
+  'For each field listed as missing, decide whether it is genuinely worth a clarifying question. Propose at most 5 concise questions, each with a short reason grounded only in the missing fields listed — never invent facts, and never propose a question about a field that is not listed as missing. If nothing listed is worth asking about, return an empty list.';
